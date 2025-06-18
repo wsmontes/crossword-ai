@@ -10,7 +10,6 @@ class CrosswordUI {
         this.clueManager = new ClueManager(this.engine);
         this.inputHandler = new InputHandler(this.engine);
         this.progressTracker = new ProgressTracker(this.engine);
-        this.settingsManager = new SettingsManager();
         
         this.setupEventListeners();
     }
@@ -18,7 +17,7 @@ class CrosswordUI {
     setupEventListeners() {
         // Grid click events
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('cell')) {
+            if (e.target.classList.contains('cell') && !e.target.classList.contains('blocked')) {
                 this.handleCellClick(e.target);
             }
         });
@@ -33,26 +32,36 @@ class CrosswordUI {
 
         // Word input events
         const wordInput = document.getElementById('word-input');
-        wordInput.addEventListener('input', (e) => {
-            this.handleWordInput(e.target.value);
-        });
+        if (wordInput) {
+            wordInput.addEventListener('input', (e) => {
+                this.handleWordInput(e.target.value);
+            });
 
-        wordInput.addEventListener('keydown', (e) => {
-            this.handleWordInputKeydown(e);
-        });
+            wordInput.addEventListener('keydown', (e) => {
+                this.handleWordInputKeydown(e);
+            });
+        }
 
         // Submit word button
-        document.getElementById('submit-word-btn').addEventListener('click', () => {
-            this.submitCurrentWord();
+        const submitWordBtn = document.getElementById('submit-word-btn');
+        if (submitWordBtn) {
+            submitWordBtn.addEventListener('click', () => {
+                this.submitCurrentWord();
+            });
+        }
+
+        // Auto-check setting change
+        document.addEventListener('settingChanged', (e) => {
+            if (e.detail.key === 'autoCheck') {
+                this.autoCheckEnabled = e.detail.value;
+            } else if (e.detail.key === 'showMistakes') {
+                this.showMistakesEnabled = e.detail.value;
+            }
         });
 
-        // Settings changes
-        document.getElementById('auto-check').addEventListener('change', (e) => {
-            this.settingsManager.setAutoCheck(e.target.checked);
-        });
-
-        document.getElementById('show-mistakes').addEventListener('change', (e) => {
-            this.settingsManager.setShowMistakes(e.target.checked);
+        // Listen for clue selection events
+        document.addEventListener('clueSelected', (e) => {
+            this.selectWord(e.detail.number, e.detail.direction);
         });
     }
 
@@ -111,6 +120,7 @@ class CrosswordUI {
         if (targetWord) {
             this.selectWord(targetWord.number, targetWord.direction);
             this.selectedCell = { row, col };
+            this.updateCursorPosition(row, col);
         }
     }
 
@@ -137,13 +147,29 @@ class CrosswordUI {
         // Update clue highlighting
         this.highlightActiveClue(number, direction);
         
+        // Update tab if needed
+        this.updateActiveTab(direction);
+        
         // Focus on input
         const wordInput = document.getElementById('word-input');
-        wordInput.disabled = false;
-        wordInput.focus();
+        if (wordInput) {
+            wordInput.disabled = false;
+            wordInput.focus();
+        }
         
         // Enable submit button
-        document.getElementById('submit-word-btn').disabled = false;
+        const submitBtn = document.getElementById('submit-word-btn');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+        }
+
+        // Update theme display in main app
+        if (window.app && window.app.updateThemeDisplay) {
+            window.app.updateThemeDisplay();
+        }
+
+        // Announce to screen readers
+        this.announceWordSelection(number, direction);
     }
 
     highlightWord(number, direction) {
@@ -151,7 +177,7 @@ class CrosswordUI {
         cells.forEach(({ row, col }) => {
             const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
             if (cellElement) {
-                cellElement.classList.add('highlighted');
+                cellElement.classList.add('active-word');
             }
         });
     }
@@ -166,24 +192,49 @@ class CrosswordUI {
         const clueElement = document.querySelector(`[data-number="${number}"][data-direction="${direction}"]`);
         if (clueElement) {
             clueElement.classList.add('active');
-            // Remove the scroll behavior to keep focus on the puzzle
-            // clueElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        // Update the theme display in the header
-        if (window.app && window.app.updateThemeDisplay) {
-            window.app.updateThemeDisplay();
+            
+            // Ensure the clue is visible (scroll into view if needed)
+            clueElement.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'nearest',
+                inline: 'nearest'
+            });
         }
     }
 
     updateCurrentWordDisplay(number, direction) {
-        document.getElementById('current-word-number').textContent = number;
-        document.getElementById('current-word-direction').textContent = direction.toUpperCase();
-        document.getElementById('current-word-clue').textContent = this.engine.getClue(number, direction);
+        const currentNumber = document.getElementById('current-number');
+        const currentDirection = document.getElementById('current-direction');
+        const currentLength = document.getElementById('current-length');
+        
+        if (currentNumber) currentNumber.textContent = number;
+        if (currentDirection) {
+            // Use translated direction
+            const translatedDirection = window.i18n ? window.i18n.t(direction) : direction.toUpperCase();
+            currentDirection.textContent = translatedDirection.toUpperCase();
+        }
+        
+        const wordLength = this.engine.getAnswer(number, direction).length;
+        if (currentLength) currentLength.textContent = wordLength;
         
         // Set current answer in input
         const currentAnswer = this.engine.getCurrentAnswer(number, direction);
-        document.getElementById('word-input').value = currentAnswer;
+        const wordInput = document.getElementById('word-input');
+        if (wordInput) {
+            wordInput.value = currentAnswer;
+            wordInput.maxLength = wordLength;
+        }
+    }
+
+    updateActiveTab(direction) {
+        const acrossTab = document.getElementById('across-tab');
+        const downTab = document.getElementById('down-tab');
+        
+        if (direction === 'across' && acrossTab && !acrossTab.classList.contains('active')) {
+            acrossTab.click();
+        } else if (direction === 'down' && downTab && !downTab.classList.contains('active')) {
+            downTab.click();
+        }
     }
 
     handleWordInput(value) {
@@ -199,44 +250,55 @@ class CrosswordUI {
         this.updateWordInGrid(number, direction, answer);
         
         // Auto-check if enabled
-        if (this.settingsManager.getAutoCheck()) {
-            const isComplete = answer.length === this.engine.getAnswer(number, direction).length;
-            if (isComplete) {
-                this.checkCurrentWord();
-            }
+        if (this.autoCheckEnabled && answer.length === this.engine.getAnswer(number, direction).length) {
+            this.checkCurrentWord();
         }
         
-        // Update progress
         this.updateProgress();
     }
 
     handleWordInputKeydown(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            this.submitCurrentWord();
-        } else if (event.key === 'Tab' && !event.shiftKey) {
-            event.preventDefault();
-            this.selectNextWord();
-        } else if (event.key === 'Tab' && event.shiftKey) {
-            event.preventDefault();
-            this.selectPreviousWord();
+        if (!this.currentWord) return;
+
+        switch (event.key) {
+            case 'Enter':
+                event.preventDefault();
+                this.submitCurrentWord();
+                break;
+            case 'Tab':
+                event.preventDefault();
+                if (event.shiftKey) {
+                    this.selectPreviousWord();
+                } else {
+                    this.selectNextWord();
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                this.clearSelection();
+                break;
         }
     }
 
     updateWordInGrid(number, direction, answer) {
         const cells = this.engine.getWordCells(number, direction);
-        const letters = answer.split('');
         
         cells.forEach(({ row, col }, index) => {
             const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
             if (cellElement) {
-                const letter = letters[index] || '';
-                cellElement.textContent = letter;
+                const letter = index < answer.length ? answer[index] : '';
                 
-                // Add animation
-                if (letter) {
+                // Preserve cell number
+                const numberSpan = cellElement.querySelector('.cell-number');
+                cellElement.textContent = letter;
+                if (numberSpan) {
+                    cellElement.appendChild(numberSpan);
+                }
+                
+                // Add animation for new letters
+                if (letter && !cellElement.textContent.includes(letter)) {
                     cellElement.classList.add('animate');
-                    setTimeout(() => cellElement.classList.remove('animate'), 200);
+                    setTimeout(() => cellElement.classList.remove('animate'), 300);
                 }
             }
         });
@@ -246,29 +308,26 @@ class CrosswordUI {
         if (!this.currentWord) return;
         
         const { number, direction } = this.currentWord;
-        const userAnswer = document.getElementById('word-input').value.toUpperCase();
+        const userAnswer = this.engine.getCurrentAnswer(number, direction);
         const correctAnswer = this.engine.getAnswer(number, direction);
         
         if (userAnswer.length !== correctAnswer.length) {
-            this.showMessage(`Answer must be ${correctAnswer.length} letters long.`, 'warning');
+            const message = window.i18n ? window.i18n.t('pleaseComplete') : 'Please complete the word before submitting';
+            this.showMessage(message, 'warning');
             return;
         }
         
-        // Update engine
-        this.engine.setUserAnswer(number, direction, userAnswer);
-        
-        // Check answer
         const isCorrect = this.engine.checkAnswer(number, direction);
         
         if (isCorrect) {
             this.markWordAsCompleted(number, direction);
-            this.showMessage('Correct!', 'success');
-            this.selectNextWord();
+            const correctMessage = window.i18n ? window.i18n.t('correct') : 'Correct!';
+            this.showMessage(correctMessage, 'success', 2000);
+            this.autoAdvanceToNextWord();
         } else {
-            if (this.settingsManager.getShowMistakes()) {
-                this.highlightIncorrectWord(number, direction);
-            }
-            this.showMessage('Not quite right. Try again!', 'error');
+            this.highlightIncorrectWord(number, direction);
+            const incorrectMessage = window.i18n ? window.i18n.t('incorrectTryAgain') : 'Incorrect. Try again!';
+            this.showMessage(incorrectMessage, 'error', 3000);
         }
         
         this.updateProgress();
@@ -283,87 +342,44 @@ class CrosswordUI {
         
         if (isCorrect) {
             this.markWordAsCompleted(number, direction);
-            this.updateProgress();
-            
-            // Check if puzzle is complete
-            if (this.checkPuzzleCompletion()) {
-                return; // Don't auto-advance if puzzle is complete
-            }
-            
-            // Auto-advance to next incomplete word
-            this.autoAdvanceToNextWord();
-        } else if (this.settingsManager.getShowMistakes()) {
+            return true;
+        } else if (this.showMistakesEnabled) {
             this.highlightIncorrectWord(number, direction);
         }
+        
+        return false;
     }
 
-    // Auto-advance to the next incomplete word
     autoAdvanceToNextWord() {
-        const allClues = [...this.engine.clues.across, ...this.engine.clues.down];
-        
-        // Find all incomplete words
-        const incompleteWords = allClues.filter(clue => {
-            const direction = this.engine.clues.across.includes(clue) ? 'across' : 'down';
-            return !this.engine.checkAnswer(clue.number, direction);
-        });
-        
-        if (incompleteWords.length === 0) {
-            // All words are complete
-            return;
-        }
-        
-        // Find the next word in numerical order
-        let nextWord = null;
-        
-        // First try to find the next word after the current one
-        if (this.currentWord) {
-            const currentIndex = allClues.findIndex(clue => {
-                const clueDirection = this.engine.clues.across.includes(clue) ? 'across' : 'down';
-                return clue.number === this.currentWord.number && clueDirection === this.currentWord.direction;
-            });
+        // Find next incomplete word
+        const allWords = [...this.engine.clues.across, ...this.engine.clues.down]
+            .map(clue => ({
+                number: clue.number,
+                direction: this.engine.clues.across.includes(clue) ? 'across' : 'down'
+            }))
+            .filter(word => !this.engine.checkAnswer(word.number, word.direction));
             
-            // Look for next incomplete word after current one
-            for (let i = currentIndex + 1; i < allClues.length; i++) {
-                const clue = allClues[i];
-                const clueDirection = this.engine.clues.across.includes(clue) ? 'across' : 'down';
-                if (!this.engine.checkAnswer(clue.number, clueDirection)) {
-                    nextWord = { number: clue.number, direction: clueDirection };
-                    break;
-                }
-            }
-        }
-        
-        // If no word found after current, start from beginning
-        if (!nextWord) {
-            const firstIncomplete = incompleteWords[0];
-            const direction = this.engine.clues.across.includes(firstIncomplete) ? 'across' : 'down';
-            nextWord = { number: firstIncomplete.number, direction };
-        }
-        
-        // Select the next word with a small delay for better UX
-        if (nextWord) {
+        if (allWords.length > 0) {
+            const nextWord = allWords[0];
             setTimeout(() => {
                 this.selectWord(nextWord.number, nextWord.direction);
-            }, 300);
+            }, 1000);
         }
     }
 
     markWordAsCompleted(number, direction) {
-        // Mark clue as completed
-        const clueElement = document.querySelector(`[data-number="${number}"][data-direction="${direction}"]`);
-        if (clueElement) {
-            clueElement.classList.add('completed');
-        }
-        
         // Mark cells as correct
         const cells = this.engine.getWordCells(number, direction);
         cells.forEach(({ row, col }) => {
             const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
             if (cellElement) {
-                cellElement.classList.add('correct');
                 cellElement.classList.remove('incorrect');
+                cellElement.classList.add('correct');
             }
         });
+        
+        // Mark clue as completed
+        this.clueManager.markAsCompleted(number, direction);
     }
 
     highlightIncorrectWord(number, direction) {
@@ -371,69 +387,88 @@ class CrosswordUI {
         cells.forEach(({ row, col }) => {
             const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
             if (cellElement) {
-                cellElement.classList.add('incorrect');
                 cellElement.classList.remove('correct');
+                cellElement.classList.add('incorrect');
+                
+                // Remove incorrect class after animation
+                setTimeout(() => {
+                    cellElement.classList.remove('incorrect');
+                }, 2000);
             }
         });
     }
 
     selectNextWord() {
-        const allClues = [...this.engine.clues.across, ...this.engine.clues.down]
-            .map(clue => ({
-                number: clue.number,
-                direction: this.engine.clues.across.includes(clue) ? 'across' : 'down'
-            }))
-            .sort((a, b) => a.number - b.number);
-        
         if (!this.currentWord) {
-            if (allClues.length > 0) {
-                this.selectWord(allClues[0].number, allClues[0].direction);
-            }
+            this.selectFirstAvailableWord();
             return;
         }
         
-        const currentIndex = allClues.findIndex(clue => 
-            clue.number === this.currentWord.number && clue.direction === this.currentWord.direction
+        const allWords = this.getAllWordsInOrder();
+        const currentIndex = allWords.findIndex(word => 
+            word.number === this.currentWord.number && word.direction === this.currentWord.direction
         );
         
-        const nextIndex = (currentIndex + 1) % allClues.length;
-        const nextClue = allClues[nextIndex];
-        
-        this.selectWord(nextClue.number, nextClue.direction);
+        if (currentIndex !== -1 && currentIndex < allWords.length - 1) {
+            const nextWord = allWords[currentIndex + 1];
+            this.selectWord(nextWord.number, nextWord.direction);
+        } else if (allWords.length > 0) {
+            // Wrap to first word
+            this.selectWord(allWords[0].number, allWords[0].direction);
+        }
     }
 
     selectPreviousWord() {
-        const allClues = [...this.engine.clues.across, ...this.engine.clues.down]
-            .map(clue => ({
-                number: clue.number,
-                direction: this.engine.clues.across.includes(clue) ? 'across' : 'down'
-            }))
-            .sort((a, b) => a.number - b.number);
-        
         if (!this.currentWord) {
-            if (allClues.length > 0) {
-                this.selectWord(allClues[allClues.length - 1].number, allClues[allClues.length - 1].direction);
-            }
+            this.selectFirstAvailableWord();
             return;
         }
         
-        const currentIndex = allClues.findIndex(clue => 
-            clue.number === this.currentWord.number && clue.direction === this.currentWord.direction
+        const allWords = this.getAllWordsInOrder();
+        const currentIndex = allWords.findIndex(word => 
+            word.number === this.currentWord.number && word.direction === this.currentWord.direction
         );
         
-        const prevIndex = currentIndex === 0 ? allClues.length - 1 : currentIndex - 1;
-        const prevClue = allClues[prevIndex];
+        if (currentIndex > 0) {
+            const prevWord = allWords[currentIndex - 1];
+            this.selectWord(prevWord.number, prevWord.direction);
+        } else if (allWords.length > 0) {
+            // Wrap to last word
+            const lastWord = allWords[allWords.length - 1];
+            this.selectWord(lastWord.number, lastWord.direction);
+        }
+    }
+
+    getAllWordsInOrder() {
+        const acrossWords = this.engine.clues.across.map(clue => ({
+            number: clue.number,
+            direction: 'across'
+        }));
         
-        this.selectWord(prevClue.number, prevClue.direction);
+        const downWords = this.engine.clues.down.map(clue => ({
+            number: clue.number,
+            direction: 'down'
+        }));
+        
+        return [...acrossWords, ...downWords].sort((a, b) => {
+            if (a.number !== b.number) {
+                return a.number - b.number;
+            }
+            return a.direction === 'across' ? -1 : 1;
+        });
+    }
+
+    selectFirstAvailableWord() {
+        if (this.engine.clues.across.length > 0) {
+            this.selectWord(this.engine.clues.across[0].number, 'across');
+        } else if (this.engine.clues.down.length > 0) {
+            this.selectWord(this.engine.clues.down[0].number, 'down');
+        }
     }
 
     clearHighlights() {
-        document.querySelectorAll('.cell.highlighted').forEach(el => {
-            el.classList.remove('highlighted');
-        });
-        
-        document.querySelectorAll('.clue-item.active').forEach(el => {
-            el.classList.remove('active');
+        document.querySelectorAll('.cell.active-word, .cell.selected, .cell.highlighted').forEach(cell => {
+            cell.classList.remove('active-word', 'selected', 'highlighted');
         });
     }
 
@@ -443,109 +478,138 @@ class CrosswordUI {
         this.selectedCell = null;
         
         // Clear current word display
-        document.getElementById('current-word-number').textContent = '';
-        document.getElementById('current-word-direction').textContent = '';
-        document.getElementById('current-word-clue').textContent = 'Select a clue to begin';
-        document.getElementById('word-input').value = '';
-        document.getElementById('word-input').disabled = true;
-        document.getElementById('submit-word-btn').disabled = true;
+        const wordInput = document.getElementById('word-input');
+        if (wordInput) {
+            wordInput.value = '';
+            wordInput.disabled = true;
+        }
+        
+        const submitBtn = document.getElementById('submit-word-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+        
+        // Clear active clue
+        document.querySelectorAll('.clue-item.active').forEach(el => {
+            el.classList.remove('active');
+        });
     }
 
     updateProgress() {
-        this.progressTracker.update();
-        // Update the new progress circle in header
-        if (window.app && window.app.updateProgressCircle) {
-            window.app.updateProgressCircle();
+        if (window.app && window.app.updateProgress) {
+            window.app.updateProgress();
         }
+        
+        this.clueManager.updateProgress();
     }
 
-    updateStats() {
-        this.progressTracker.updateStats();
+    updateProgressDisplay() {
+        this.updateProgress();
     }
 
     highlightResults(results) {
-        results.forEach(result => {
-            const cells = this.engine.getWordCells(result.number, result.direction);
+        results.words.forEach(wordResult => {
+            const cells = this.engine.getWordCells(wordResult.number, wordResult.direction);
             cells.forEach(({ row, col }) => {
                 const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
                 if (cellElement) {
-                    if (result.correct) {
-                        cellElement.classList.add('correct');
-                        cellElement.classList.remove('incorrect');
-                    } else {
-                        cellElement.classList.add('incorrect');
-                        cellElement.classList.remove('correct');
-                    }
+                    cellElement.classList.remove('correct', 'incorrect');
+                    cellElement.classList.add(wordResult.correct ? 'correct' : 'incorrect');
                 }
             });
             
-            // Update clue styling
-            const clueElement = document.querySelector(`[data-number="${result.number}"][data-direction="${result.direction}"]`);
-            if (clueElement) {
-                if (result.correct) {
-                    clueElement.classList.add('completed');
-                } else {
-                    clueElement.classList.remove('completed');
-                }
+            if (wordResult.correct) {
+                this.clueManager.markAsCompleted(wordResult.number, wordResult.direction);
             }
         });
     }
 
     showHint(hint) {
-        this.showMessage(hint, 'info', 5000);
+        if (!this.currentWord) return;
         
-        // Highlight the current word with a pulse animation
-        if (this.currentWord) {
-            const cells = this.engine.getWordCells(this.currentWord.number, this.currentWord.direction);
-            cells.forEach(({ row, col }) => {
-                const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                if (cellElement) {
-                    cellElement.classList.add('hint');
-                    setTimeout(() => cellElement.classList.remove('hint'), 1000);
-                }
-            });
-        }
+        const cells = this.engine.getWordCells(this.currentWord.number, this.currentWord.direction);
+        cells.forEach(({ row, col }) => {
+            const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (cellElement) {
+                cellElement.classList.add('hint');
+                setTimeout(() => {
+                    cellElement.classList.remove('hint');
+                }, 3000);
+            }
+        });
+        
+        this.clueManager.highlightClue(this.currentWord.number, this.currentWord.direction, 'hint');
     }
 
     showMessage(message, type = 'info', duration = 3000) {
-        const statusElement = document.getElementById('status-text');
-        const originalText = statusElement.textContent;
-        const originalColor = statusElement.style.color;
-        
-        statusElement.textContent = message;
-        
-        switch (type) {
-            case 'success':
-                statusElement.style.color = 'var(--success-color)';
-                break;
-            case 'error':
-                statusElement.style.color = 'var(--danger-color)';
-                break;
-            case 'warning':
-                statusElement.style.color = 'var(--warning-color)';
-                break;
-            case 'info':
-                statusElement.style.color = 'var(--puzzle-primary)';
-                break;
-            default:
-                statusElement.style.color = originalColor;
+        if (window.app && window.app.showNotification) {
+            window.app.showNotification(message, type, duration);
         }
-        
-        setTimeout(() => {
-            statusElement.textContent = originalText;
-            statusElement.style.color = originalColor;
-        }, duration);
     }
 
     checkPuzzleCompletion() {
-        const progress = this.engine.getProgress();
-        if (progress.completed === progress.total && progress.total > 0) {
-            // Puzzle completed!
-            setTimeout(() => {
-                document.dispatchEvent(new CustomEvent('puzzleCompleted'));
-            }, 500);
-            return true;
+        const totalWords = this.engine.getTotalWords();
+        const completedWords = this.engine.getCompletedWords();
+        
+        if (totalWords > 0 && completedWords === totalWords) {
+            // Dispatch puzzle completion event
+            const event = new CustomEvent('puzzleCompleted', {
+                detail: {
+                    totalWords,
+                    completedWords,
+                    hintsUsed: window.app?.hintsUsed || 0,
+                    timeElapsed: window.app?.startTime ? Date.now() - window.app.startTime : 0
+                }
+            });
+            document.dispatchEvent(event);
         }
-        return false;
+    }
+
+    updateCursorPosition(row, col) {
+        // Remove previous cursor
+        document.querySelectorAll('.cell.selected').forEach(cell => {
+            cell.classList.remove('selected');
+        });
+        
+        // Add cursor to new position
+        const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+        if (cellElement) {
+            cellElement.classList.add('selected');
+        }
+    }
+
+    announceWordSelection(number, direction) {
+        const clue = this.engine.getClue(number, direction);
+        const announcement = `Selected ${number} ${direction}: ${clue}`;
+        
+        // Create or update aria-live region
+        let liveRegion = document.getElementById('aria-live');
+        if (liveRegion) {
+            liveRegion.textContent = announcement;
+        }
+    }
+
+    // Animation helpers
+    animateCell(row, col, animationType = 'pulse') {
+        const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+        if (cellElement) {
+            cellElement.classList.add(animationType);
+            setTimeout(() => {
+                cellElement.classList.remove(animationType);
+            }, 600);
+        }
+    }
+
+    pulseWord(number, direction) {
+        const cells = this.engine.getWordCells(number, direction);
+        cells.forEach(({ row, col }, index) => {
+            setTimeout(() => {
+                this.animateCell(row, col, 'pulse');
+            }, index * 100);
+        });
+    }
+
+    getSelectedClue() {
+        return this.currentWord;
     }
 }

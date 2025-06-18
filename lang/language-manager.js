@@ -54,9 +54,9 @@ class LanguageManager {
     }
     
     updateUI() {
-        // Update all elements with data-lang attribute
-        document.querySelectorAll('[data-lang]').forEach(element => {
-            const key = element.getAttribute('data-lang');
+        // Update all elements with data-i18n attribute
+        document.querySelectorAll('[data-i18n]').forEach(element => {
+            const key = element.getAttribute('data-i18n');
             const text = this.t(key);
             
             if (element.tagName === 'INPUT' && (element.type === 'button' || element.type === 'submit')) {
@@ -66,6 +66,20 @@ class LanguageManager {
             } else {
                 element.textContent = text;
             }
+        });
+        
+        // Update placeholders with data-i18n-placeholder attribute
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+            const key = element.getAttribute('data-i18n-placeholder');
+            const text = this.t(key);
+            element.placeholder = text;
+        });
+        
+        // Update aria-labels with data-i18n-aria attribute
+        document.querySelectorAll('[data-i18n-aria]').forEach(element => {
+            const key = element.getAttribute('data-i18n-aria');
+            const text = this.t(key);
+            element.setAttribute('aria-label', text);
         });
         
         // Update title

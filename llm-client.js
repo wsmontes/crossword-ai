@@ -12,11 +12,73 @@ class LLMClient {
         this.openaiApiKey = '';
         this.openaiModel = 'gpt-3.5-turbo';
         this.openaiEndpoint = 'https://api.openai.com/v1';
+        
+        // Load stored settings
+        this.loadStoredSettings();
+    }
+
+    loadStoredSettings() {
+        try {
+            const storage = new SecureStorage();
+            
+            // Load OpenAI API key
+            const storedApiKey = storage.getApiKey('openai');
+            if (storedApiKey) {
+                this.openaiApiKey = storedApiKey;
+            }
+            
+            // Load stored provider preference
+            const settings = storage.getSettings();
+            if (settings.aiProvider) {
+                this.provider = settings.aiProvider;
+            }
+            
+            // Load stored endpoints
+            const storedEndpoint = storage.getEndpoint('lmstudio');
+            if (storedEndpoint) {
+                this.endpoint = storedEndpoint;
+            }
+            
+            console.log('LLMClient: Loaded stored settings');
+        } catch (error) {
+            console.warn('Failed to load stored LLM settings:', error);
+        }
     }
 
     setProvider(provider) {
         this.provider = provider;
         this.isConnected = false;
+        
+        // Load appropriate settings for the new provider
+        if (provider === 'openai') {
+            this.loadOpenAISettings();
+        } else if (provider === 'lmstudio') {
+            this.loadLMStudioSettings();
+        }
+    }
+
+    loadOpenAISettings() {
+        try {
+            const storage = new SecureStorage();
+            const storedApiKey = storage.getApiKey('openai');
+            if (storedApiKey) {
+                this.openaiApiKey = storedApiKey;
+            }
+        } catch (error) {
+            console.warn('Failed to load OpenAI settings:', error);
+        }
+    }
+
+    loadLMStudioSettings() {
+        try {
+            const storage = new SecureStorage();
+            const storedEndpoint = storage.getEndpoint('lmstudio');
+            if (storedEndpoint) {
+                this.endpoint = storedEndpoint;
+            }
+        } catch (error) {
+            console.warn('Failed to load LM Studio settings:', error);
+        }
     }
 
     setModel(model) {
@@ -25,6 +87,14 @@ class LLMClient {
 
     setEndpoint(endpoint) {
         this.endpoint = endpoint;
+        
+        // Save to secure storage for LM Studio
+        try {
+            const storage = new SecureStorage();
+            storage.setEndpoint('lmstudio', endpoint);
+        } catch (error) {
+            console.warn('Failed to save LM Studio endpoint:', error);
+        }
     }
 
     setTemperature(temperature) {
@@ -34,6 +104,27 @@ class LLMClient {
     setOpenAIApiKey(apiKey) {
         this.openaiApiKey = apiKey;
         this.isConnected = false;
+        
+        // Save to secure storage
+        try {
+            const storage = new SecureStorage();
+            storage.setApiKey('openai', apiKey);
+        } catch (error) {
+            console.warn('Failed to save OpenAI API key:', error);
+        }
+    }
+
+    clearOpenAIApiKey() {
+        this.openaiApiKey = '';
+        this.isConnected = false;
+        
+        // Remove from secure storage
+        try {
+            const storage = new SecureStorage();
+            storage.clearApiKey('openai');
+        } catch (error) {
+            console.warn('Failed to clear OpenAI API key:', error);
+        }
     }
 
     setOpenAIModel(model) {
@@ -67,19 +158,26 @@ class LLMClient {
     }
 
     async testLMStudioConnection() {
-        const response = await fetch(`${this.endpoint}/v1/models`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
+        try {
+            const response = await fetch(`${this.endpoint}/v1/models`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
 
-        if (response.ok) {
-            this.isConnected = true;
-            this.lastError = null;
-            return { success: true, message: 'Connected to LM Studio' };
-        } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (response.ok) {
+                this.isConnected = true;
+                this.lastError = null;
+                return { success: true, message: 'Connected to LM Studio' };
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Cannot connect to LM Studio. Please ensure LM Studio is running and accessible.');
+            }
+            throw error;
         }
     }
 
@@ -88,26 +186,39 @@ class LLMClient {
             throw new Error('OpenAI API key is required');
         }
 
-        const response = await fetch(`${this.openaiEndpoint}/models`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${this.openaiApiKey}`,
-                'Content-Type': 'application/json',
-            }
-        });
+        try {
+            const response = await fetch(`${this.openaiEndpoint}/models`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.openaiApiKey}`,
+                    'Content-Type': 'application/json',
+                }
+            });
 
-        if (response.ok) {
-            this.isConnected = true;
-            this.lastError = null;
-            return { success: true, message: 'Connected to OpenAI' };
-        } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (response.ok) {
+                this.isConnected = true;
+                this.lastError = null;
+                return { success: true, message: 'Connected to OpenAI' };
+            } else if (response.status === 401) {
+                throw new Error('Invalid OpenAI API key. Please check your API key.');
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Cannot connect to OpenAI. Please check your internet connection.');
+            }
+            throw error;
         }
     }
 
     async generatePuzzle(prompt) {
+        // Try to connect if not already connected
         if (!this.isConnected) {
-            throw new Error('Not connected to AI service');
+            const connectionResult = await this.testConnection();
+            if (!connectionResult.success) {
+                throw new Error('Not connected to AI service');
+            }
         }
 
         try {
@@ -118,6 +229,8 @@ class LLMClient {
             }
         } catch (error) {
             console.error('Error generating puzzle:', error);
+            // Reset connection status on error
+            this.isConnected = false;
             throw error;
         }
     }
@@ -187,15 +300,31 @@ class LLMClient {
     }
 
     async getHint(clue, currentAnswer) {
+        // Try to connect if not already connected
         if (!this.isConnected) {
-            throw new Error('Not connected to AI service');
+            const connectionResult = await this.testConnection();
+            if (!connectionResult.success) {
+                throw new Error('Not connected to AI service');
+            }
         }
 
-        const prompt = `Given this crossword clue: "${clue}"
-        Current partial answer: "${currentAnswer}" (empty positions shown as spaces)
+        // Create language-aware prompt
+        const isPortuguese = window.i18n && window.i18n.getCurrentLanguage() === 'pt';
         
-        Please provide a helpful hint that guides the solver toward the answer without giving it away completely.
-        Make the hint encouraging and educational.`;
+        let prompt;
+        if (isPortuguese) {
+            prompt = `Dada esta pista de palavra cruzada: "${clue}"
+            Resposta parcial atual: "${currentAnswer}" (posições vazias mostradas como espaços)
+            
+            Por favor, forneça uma dica útil que guie o solucionador para a resposta sem revelá-la completamente.
+            Torne a dica encorajadora e educativa. Responda em português.`;
+        } else {
+            prompt = `Given this crossword clue: "${clue}"
+            Current partial answer: "${currentAnswer}" (empty positions shown as spaces)
+            
+            Please provide a helpful hint that guides the solver toward the answer without giving it away completely.
+            Make the hint encouraging and educational.`;
+        }
 
         try {
             if (this.provider === 'openai') {
@@ -205,6 +334,8 @@ class LLMClient {
             }
         } catch (error) {
             console.error('Error getting hint:', error);
+            // Reset connection status on error
+            this.isConnected = false;
             throw error;
         }
     }
@@ -274,8 +405,12 @@ class LLMClient {
     }
 
     async explainAnswer(clue, answer) {
+        // Try to connect if not already connected
         if (!this.isConnected) {
-            throw new Error('Not connected to AI service');
+            const connectionResult = await this.testConnection();
+            if (!connectionResult.success) {
+                throw new Error('Not connected to AI service');
+            }
         }
 
         const prompt = `Explain why "${answer}" is the correct answer for the crossword clue: "${clue}"
@@ -290,6 +425,8 @@ class LLMClient {
             }
         } catch (error) {
             console.error('Error explaining answer:', error);
+            // Reset connection status on error
+            this.isConnected = false;
             throw error;
         }
     }
@@ -399,8 +536,12 @@ class LLMClient {
     }
 
     async analyzePuzzle(prompt) {
+        // Try to connect if not already connected
         if (!this.isConnected) {
-            throw new Error('Not connected to AI service');
+            const connectionResult = await this.testConnection();
+            if (!connectionResult.success) {
+                throw new Error('Not connected to AI service');
+            }
         }
 
         try {
@@ -411,6 +552,8 @@ class LLMClient {
             }
         } catch (error) {
             console.error('Error analyzing puzzle:', error);
+            // Reset connection status on error
+            this.isConnected = false;
             throw error;
         }
     }

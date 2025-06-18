@@ -1,262 +1,414 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="pt" class="no-js">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Palavras Cruzadas AI</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta name="description" content="AI-powered crossword puzzle game with intelligent hints and responsive design">
+    <meta name="theme-color" content="#6366f1">
+    <title>Palavras Cruzadas AI - Jogo de Quebra-Cabeça Inteligente</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Language Scripts -->
+    <script src="lang/language-manager.js"></script>
+    <script src="lang/en.js"></script>
+    <script src="lang/pt.js"></script>
 </head>
-<body>
-    <div class="game-app">
-        <!-- Theme and Current Clue Info -->
-        <div class="theme-info" id="theme-info" style="margin: 2rem auto 1rem auto; max-width: 700px; text-align: center;">
-            <div class="theme-title" id="theme-title">Mundo da Música</div>
-            <div class="current-clue-subtitle" id="current-clue-subtitle">2 ACROSS: Instrumento eletrônico que produz som</div>
-        </div>
-
-        <!-- Progress and Actions Row -->
-        <div class="top-actions" style="display: flex; align-items: center; justify-content: space-between; max-width: 1100px; margin: 0 auto 1.5rem auto;">
-            <div class="progress-display">
-                <div class="progress-circle">
-                    <svg class="progress-ring" width="60" height="60">
-                        <circle class="progress-ring-background" cx="30" cy="30" r="25"></circle>
-                        <circle class="progress-ring-fill" cx="30" cy="30" r="25" id="progress-ring"></circle>
-                    </svg>
-                    <div class="progress-text" id="progress-text">0%</div>
-                </div>
-                <div class="progress-stats">
-                    <span id="words-completed">0</span>/<span id="words-total">0</span>
-                </div>
-            </div>
-            <div class="game-actions">
-                <button class="btn btn-secondary" id="hint-btn">
-                    <i class="fas fa-lightbulb"></i>
-                    <span data-lang="hint">Dica</span>
-                </button>
-                <button class="btn btn-secondary" id="check-btn">
-                    <i class="fas fa-check"></i>
-                    <span data-lang="checkAnswers">Verificar</span>
-                </button>
-                <button class="btn btn-icon" id="settings-btn" title="Settings">
-                    <i class="fas fa-cog"></i>
-                </button>
-                <button class="btn btn-icon" id="ai-settings-btn" title="AI Settings">
-                    <i class="fas fa-robot"></i>
-                </button>
-                <button class="btn btn-primary" id="new-puzzle-btn">
-                    <i class="fas fa-plus"></i>
-                    <span data-lang="newPuzzle">Nova Palavra Cruzada</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Main Game Area -->
-        <main class="game-main">
-            <!-- Puzzle Area -->
-            <div class="puzzle-area">
-                <!-- Crossword Grid -->
-                <div class="grid-section">
-                    <div class="crossword-grid-container">
-                        <div class="crossword-grid" id="crossword-grid">
-                            <!-- Grid will be populated here -->
-                        </div>
+<body class="theme-light">
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- App Shell -->
+    <div id="app" class="app-shell">
+        <!-- Header -->
+        <header class="app-header" role="banner">
+            <div class="container">
+                <div class="header-content">
+                    <div class="header-brand">
+                        <h1 class="app-title">
+                            <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+                            <span data-i18n="title">Crossword AI</span>
+                        </h1>
+                        <p class="app-subtitle" data-i18n="subtitle">Jogo de Quebra-Cabeça Inteligente</p>
                     </div>
-                    <!-- Current Word Input -->
-                    <div class="current-word-display" id="current-word-display">
-                        <div class="word-info">
-                            <span class="word-number" id="current-word-number">1</span>
-                            <span class="word-direction" id="current-word-direction">ACROSS</span>
-                        </div>
-                        <div class="word-clue" id="current-word-clue">Objeto de leitura e conhecimento</div>
-                        <div class="word-input-container">
-                            <input type="text" id="word-input" class="word-input" placeholder="Digite sua resposta aqui...">
-                            <button class="btn btn-small" id="submit-word-btn">
-                                <i class="fas fa-arrow-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Clues Section -->
-                <div class="clues-section">
-                    <div class="clues-tabs">
-                        <button class="clues-tab active" id="across-tab">
-                            <i class="fas fa-arrow-right"></i>
-                            <span data-lang="across">Horizontais</span>
+                    
+                    <div class="header-actions">
+                        <button id="settings-btn" class="btn btn-ghost btn-icon" aria-label="Settings" title="Settings">
+                            <i class="fas fa-cog" aria-hidden="true"></i>
                         </button>
-                        <button class="clues-tab" id="down-tab">
-                            <i class="fas fa-arrow-down"></i>
-                            <span data-lang="down">Verticais</span>
+                        <button id="ai-settings-btn" class="btn btn-ghost btn-icon" aria-label="AI Settings" title="AI Settings">
+                            <i class="fas fa-robot" aria-hidden="true"></i>
+                        </button>
+                        <button id="theme-toggle" class="btn btn-ghost btn-icon" aria-label="Toggle dark mode" title="Toggle theme">
+                            <i class="fas fa-moon" aria-hidden="true"></i>
                         </button>
                     </div>
-                    <div class="clues-content">
-                        <div class="clues-list active" id="across-clues">
-                            <!-- Across clues will be populated here -->
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main-content" class="app-main" role="main">
+            <div class="container">
+                <!-- Game Status Bar -->
+                <section class="game-status" role="complementary" aria-label="Game Status">
+                    <div class="status-content">
+                        <div class="theme-display">
+                            <h2 id="theme-title" class="theme-title">Tema do Jardim</h2>
+                            <p id="current-clue" class="current-clue" data-i18n="clickClueToStart">Clique em uma pista para começar a resolver</p>
                         </div>
-                        <div class="clues-list" id="down-clues">
-                            <!-- Down clues will be populated here -->
+                        
+                        <div class="game-controls">
+                            <div class="progress-indicator">
+                                <div class="progress-circle" role="progressbar" aria-label="Game progress">
+                                    <svg width="48" height="48" viewBox="0 0 48 48">
+                                        <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" stroke-width="3" opacity="0.2"/>
+                                        <circle id="progress-circle" cx="24" cy="24" r="20" fill="none" stroke="currentColor" stroke-width="3" 
+                                                stroke-dasharray="125.6" stroke-dashoffset="125.6" stroke-linecap="round"/>
+                                    </svg>
+                                    <span id="progress-text" class="progress-text">0%</span>
+                                </div>
+                                <div class="progress-stats">
+                                    <span id="words-completed">0</span>/<span id="total-words">0</span>
+                                    <small data-i18n="wordsCompleted">completadas</small>
+                                </div>
+                            </div>
+                            
+                            <div class="action-buttons">
+                                <button id="hint-btn" class="btn btn-secondary" aria-label="Get hint for current word">
+                                    <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                    <span data-i18n="getHint">Obter Dica</span>
+                                </button>
+                                <button id="check-btn" class="btn btn-secondary" aria-label="Check current answers">
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <span data-i18n="checkAnswers">Verificar Respostas</span>
+                                </button>
+                                <button id="new-puzzle-btn" class="btn btn-primary" aria-label="Generate new puzzle">
+                                    <i class="fas fa-plus" aria-hidden="true"></i>
+                                    <span data-i18n="newPuzzle">Nova Palavra Cruzada</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </section>
+
+                <!-- Game Board -->
+                <section class="game-board" role="main" aria-label="Crossword puzzle">
+                    <div class="board-layout">
+                        <!-- Puzzle Grid -->
+                        <div class="puzzle-container">
+                            <div class="grid-wrapper">
+                                <div id="crossword-grid" class="crossword-grid" role="grid" aria-label="Crossword puzzle grid">
+                                    <!-- Grid cells will be generated here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Current Word Input -->
+                            <div class="word-input-panel" role="region" aria-label="Current word input">
+                                <div class="word-info">
+                                    <span id="current-number" class="word-number">1</span>
+                                    <span id="current-direction" class="word-direction">ACROSS</span>
+                                    <span class="word-length">(<span id="current-length">5</span>)</span>
+                                </div>
+                                <div class="input-group">
+                                    <input 
+                                        type="text" 
+                                        id="word-input" 
+                                        class="word-input" 
+                                        placeholder="Digite sua resposta..."
+                                        data-i18n-placeholder="typeAnswer"
+                                        aria-label="Enter your answer"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+                                    <button id="submit-word-btn" class="btn btn-primary btn-icon" aria-label="Submit word">
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clues Panel -->
+                        <aside class="clues-panel" role="complementary" aria-label="Crossword clues">
+                            <div class="clues-header">
+                                <nav class="clues-tabs" role="tablist">
+                                    <button 
+                                        id="across-tab" 
+                                        class="clues-tab active" 
+                                        role="tab" 
+                                        aria-selected="true"
+                                        aria-controls="across-clues"
+                                    >
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                        <span data-i18n="across">Horizontais</span>
+                                    </button>
+                                    <button 
+                                        id="down-tab" 
+                                        class="clues-tab" 
+                                        role="tab" 
+                                        aria-selected="false"
+                                        aria-controls="down-clues"
+                                    >
+                                        <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                                        <span data-i18n="down">Verticais</span>
+                                    </button>
+                                </nav>
+                            </div>
+                            
+                            <div class="clues-content">
+                                <div 
+                                    id="across-clues" 
+                                    class="clues-list active" 
+                                    role="tabpanel" 
+                                    aria-labelledby="across-tab"
+                                >
+                                    <!-- Across clues will be generated here -->
+                                </div>
+                                <div 
+                                    id="down-clues" 
+                                    class="clues-list" 
+                                    role="tabpanel" 
+                                    aria-labelledby="down-tab"
+                                    hidden
+                                >
+                                    <!-- Down clues will be generated here -->
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
             </div>
         </main>
 
-        <!-- Floating Action Buttons -->
-        <div class="floating-actions">
-            <button class="fab" id="fab-new-puzzle-btn" title="Nova Palavra Cruzada">
-                <i class="fas fa-plus"></i>
-            </button>
-            <button class="fab secondary" id="fab-settings-btn" title="Configurações">
-                <i class="fas fa-cog"></i>
-            </button>
-            <button class="fab secondary" id="fab-ai-settings-btn" title="Configurações de IA">
-                <i class="fas fa-robot"></i>
-            </button>
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay" role="dialog" aria-modal="true" aria-labelledby="loading-title">
+            <div class="loading-content">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                </div>
+                <h2 id="loading-title" class="loading-title" data-i18n="generating">Gerando Quebra-Cabeça</h2>
+                <p id="loading-message" class="loading-message" data-i18n="pleasewait">Criando sua palavra cruzada personalizada...</p>
+                <div class="loading-steps">
+                    <div class="step active" data-step="connect">
+                        <i class="fas fa-link" aria-hidden="true"></i>
+                        <span data-i18n="connectingAI">Conectando à IA</span>
+                    </div>
+                    <div class="step" data-step="generate">
+                        <i class="fas fa-brain" aria-hidden="true"></i>
+                        <span data-i18n="generatingTheme">Gerando Tema</span>
+                    </div>
+                    <div class="step" data-step="build">
+                        <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+                        <span data-i18n="buildingGrid">Construindo Grade</span>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Notification System -->
+        <div id="notifications" class="notifications" role="alert" aria-live="polite"></div>
+
+        <!-- Floating Action Button -->
+        <button id="fab-new-puzzle" class="fab" aria-label="Nova palavra cruzada rápida" data-i18n-aria="quickNewPuzzleAriaLabel">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+        </button>
     </div>
 
+    <!-- Modals -->
     <!-- Settings Modal -->
-    <div class="modal" id="settings-modal">
+    <div id="settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="modal-backdrop" data-dismiss="modal"></div>
         <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-cog"></i> <span data-lang="settings">Configurações</span></h3>
-                <button class="modal-close" id="close-settings-modal">
-                    <i class="fas fa-times"></i>
+            <header class="modal-header">
+                <h2 id="settings-title" class="modal-title">
+                    <i class="fas fa-cog" aria-hidden="true"></i>
+                    <span data-i18n="settings">Configurações</span>
+                </h2>
+                <button class="modal-close" data-dismiss="modal" aria-label="Fechar" data-i18n-aria="closeAriaLabel">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
-            </div>
+            </header>
             <div class="modal-body">
-                <div class="setting-group">
-                    <label for="language-select" data-lang="language">Idioma:</label>
-                    <select id="language-select" class="setting-select">
-                        <option value="pt" data-lang="portuguese">Português</option>
-                        <option value="en" data-lang="english">Inglês</option>
-                    </select>
-                </div>
-                
-                <div class="setting-group">
-                    <label for="difficulty-select" data-lang="difficulty">Dificuldade:</label>
-                    <select id="difficulty-select" class="setting-select">
-                        <option value="easy" data-lang="easy">Fácil</option>
-                        <option value="medium" selected data-lang="medium">Médio</option>
-                        <option value="hard" data-lang="hard">Difícil</option>
-                    </select>
-                </div>
-                
-                <div class="setting-group">
-                    <label for="grid-size-select" data-lang="gridSize">Tamanho da Grade:</label>
-                    <select id="grid-size-select" class="setting-select">
-                        <option value="small" data-lang="small">Pequeno (11x11)</option>
-                        <option value="medium" selected data-lang="medium">Médio (15x15)</option>
-                        <option value="large" data-lang="large">Grande (21x21)</option>
-                    </select>
-                </div>
-
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="auto-check" checked>
-                        <span data-lang="autoCheck">Verificação automática das respostas</span>
-                    </label>
-                </div>
-
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="show-mistakes">
-                        <span data-lang="highlightMistakes">Destacar erros</span>
-                    </label>
-                </div>
+                <form class="settings-form">
+                    <div class="form-group">
+                        <label for="language-select" data-i18n="language">Idioma:</label>
+                        <select id="language-select" class="form-control">
+                            <option value="en">English</option>
+                            <option value="pt">Português</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="difficulty-select" data-i18n="difficulty">Dificuldade:</label>
+                        <select id="difficulty-select" class="form-control">
+                            <option value="easy" data-i18n="easy">Fácil</option>
+                            <option value="medium" data-i18n="medium">Médio</option>
+                            <option value="hard" data-i18n="hard">Difícil</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="grid-size-select" data-i18n="gridSize">Tamanho da Grade:</label>
+                        <select id="grid-size-select" class="form-control">
+                            <option value="small" data-i18n="small">Pequeno (11×11)</option>
+                            <option value="medium" data-i18n="medium">Médio (15×15)</option>
+                            <option value="large" data-i18n="large">Grande (21×21)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto-check" checked>
+                            <span class="checkbox-custom"></span>
+                            <span data-i18n="autoCheck">Verificação automática das respostas</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-mistakes">
+                            <span class="checkbox-custom"></span>
+                            <span data-i18n="highlightMistakes">Destacar erros</span>
+                        </label>
+                    </div>
+                </form>
             </div>
+            <footer class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                    <span data-i18n="cancel">Cancelar</span>
+                </button>
+                <button type="button" id="save-settings-btn" class="btn btn-primary">
+                    <i class="fas fa-save" aria-hidden="true"></i>
+                    <span data-i18n="save">Salvar</span>
+                </button>
+            </footer>
         </div>
     </div>
 
     <!-- AI Settings Modal -->
-    <div class="modal" id="ai-settings-modal">
+    <div id="ai-settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title">
+        <div class="modal-backdrop" data-dismiss="modal"></div>
         <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-robot"></i> <span data-lang="aiSettings">Configurações de IA</span></h3>
-                <button class="modal-close" id="close-ai-settings-modal">
-                    <i class="fas fa-times"></i>
+            <header class="modal-header">
+                <h2 id="ai-settings-title" class="modal-title">
+                    <i class="fas fa-robot" aria-hidden="true"></i>
+                    <span data-i18n="aiSettings">Configurações de IA</span>
+                </h2>
+                <button class="modal-close" data-dismiss="modal" aria-label="Fechar" data-i18n-aria="closeAriaLabel">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
-            </div>
+            </header>
             <div class="modal-body">
-                <div class="setting-group">
-                    <label for="ai-provider-select" data-lang="aiProvider">Provedor de IA:</label>
-                    <select id="ai-provider-select" class="setting-select">
-                        <option value="lmstudio">LM Studio</option>
-                        <option value="openai">OpenAI</option>
-                    </select>
+                <form class="ai-settings-form">
+                    <div class="form-group">
+                        <label for="ai-provider-select" data-i18n="aiProvider">Provedor de IA:</label>
+                        <select id="ai-provider-select" class="form-control">
+                            <option value="lmstudio">LM Studio</option>
+                            <option value="openai">OpenAI</option>
+                        </select>
+                    </div>
+                    
+                    <div id="lmstudio-settings" class="provider-settings">
+                        <div class="form-group">
+                            <label for="lmstudio-endpoint" data-i18n="lmStudioEndpoint">Endpoint do LM Studio:</label>
+                            <input type="url" id="lmstudio-endpoint" class="form-control" value="http://localhost:1234">
+                        </div>
+                    </div>
+                    
+                    <div id="openai-settings" class="provider-settings" hidden>
+                        <div class="form-group">
+                            <label for="openai-key" data-i18n="openaiApiKey">Chave API OpenAI</label>
+                            <div class="input-with-status">
+                                <input type="password" id="openai-key" class="form-control" placeholder="Digite sua chave API" data-i18n-placeholder="enterApiKey">
+                                <span id="openai-key-status" class="input-status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" id="test-connection-btn" class="btn btn-secondary">
+                            <i class="fas fa-plug" aria-hidden="true"></i>
+                            <span data-i18n="testConnection">Testar Conexão</span>
+                        </button>
+                        <div id="connection-status" class="connection-status">
+                            <span class="status-indicator"></span>
+                            <span class="status-text" data-i18n="notConnected">Não conectado</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <footer class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                    <span data-i18n="cancel">Cancelar</span>
+                </button>
+                <button type="button" id="save-ai-settings-btn" class="btn btn-primary">
+                    <i class="fas fa-save" aria-hidden="true"></i>
+                    <span data-i18n="save">Salvar</span>
+                </button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Completion Modal -->
+    <div id="completion-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="completion-title">
+        <div class="modal-backdrop" data-dismiss="modal"></div>
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="completion-icon">
+                    <i class="fas fa-trophy" aria-hidden="true"></i>
                 </div>
-                
-                <div class="setting-group" id="lmstudio-settings">
-                    <label for="lmstudio-endpoint" data-lang="lmStudioEndpoint">Endpoint do LM Studio:</label>
-                    <input type="text" id="lmstudio-endpoint" class="setting-input" value="http://localhost:1234">
+                <h2 id="completion-title" class="completion-title" data-i18n="puzzleComplete">
+                    Parabéns! Você completou a palavra cruzada!
+                </h2>
+                <div class="completion-stats">
+                    <div class="stat">
+                        <span class="stat-value" id="completion-time">5:23</span>
+                        <span class="stat-label" data-i18n="time">Tempo</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="hints-used">2</span>
+                        <span class="stat-label" data-i18n="hintsUsed">Dicas Usadas</span>
+                    </div>
                 </div>
-                
-                <div class="setting-group" id="openai-settings" style="display: none;">
-                    <label for="openai-key">OpenAI API Key:</label>
-                    <input type="password" id="openai-key" class="setting-input" placeholder="Digite a chave da API">
-                </div>
-                
                 <div class="modal-actions">
-                    <button class="btn btn-secondary" id="test-connection-btn">
-                        <i class="fas fa-wifi"></i>
-                        <span data-lang="testConnection">Testar Conexão</span>
+                    <button id="new-puzzle-modal-btn" class="btn btn-primary">
+                        <i class="fas fa-plus" aria-hidden="true"></i>
+                        <span data-i18n="playAgain">Jogar Novamente</span>
                     </button>
                 </div>
-                
-                <div class="connection-status" id="connection-status">
-                    <i class="fas fa-circle connection-dot"></i>
-                    <span data-lang="connected">Connected to LM Studio</span>
-                </div>
             </div>
         </div>
     </div>
 
-    <!-- Congratulations Modal -->
-    <div class="modal" id="congratulations-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-trophy"></i> <span data-lang="puzzleComplete">Parabéns! Você completou a palavra cruzada!</span></h2>
-            </div>
-            <div class="modal-body">
-                <div class="completion-stats">
-                    <div class="completion-stat">
-                        <span class="stat-value" id="final-time">--:--</span>
-                        <span class="stat-label">Tempo</span>
-                    </div>
-                    <div class="completion-stat">
-                        <span class="stat-value" id="final-hints">0</span>
-                        <span class="stat-label" data-lang="hintsUsed">Dicas Usadas</span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-primary" id="new-puzzle-modal-btn">
-                    <i class="fas fa-redo"></i>
-                    <span data-lang="playAgain">Jogar Novamente</span>
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- ARIA Live Region for announcements -->
+    <div id="aria-live" class="sr-only" aria-live="polite"></div>
 
-    <!-- Scripts - Language files first -->
-    <script src="lang/pt.js?v=2024061725"></script>
-    <script src="lang/en.js?v=2024061725"></script>
-    <script src="lang/language-manager.js?v=2024061725"></script>
-    
-    <!-- Core scripts -->
-    <script src="secure-storage.js?v=2024061725"></script>
-    <script src="llm-client.js?v=2024061725"></script>
-    <script src="llm-prompts.js?v=2024061725"></script>
-    <script src="crossword-engine.js?v=2024061725"></script>
-    <script src="utils/crossword-utils.js?v=2024061725"></script>
-    <script src="ui/grid-manager.js?v=2024061725"></script>
-    <script src="ui/clue-manager.js?v=2024061725"></script>
-    <script src="ui/input-handler.js?v=2024061725"></script>
-    <script src="ui/progress-tracker.js?v=2024061725"></script>
-    <script src="ui/settings-manager.js?v=2024061725"></script>
-    <script src="crossword-ui.js?v=2024061725"></script>
-    <script src="main.js?v=2024061725"></script>
+    <!-- Scripts -->
+    <script src="secure-storage.js"></script>
+    <script src="utils/crossword-utils.js"></script>
+    <script src="crossword-engine.js"></script>
+    <script src="llm-client.js"></script>
+    <script src="llm-prompts.js"></script>
+    <script src="ui/grid-manager.js"></script>
+    <script src="ui/clue-manager.js"></script>
+    <script src="ui/input-handler.js"></script>
+    <script src="ui/progress-tracker.js"></script>
+    <script src="ui/settings-manager.js"></script>
+    <script src="crossword-ui.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>

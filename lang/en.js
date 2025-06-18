@@ -37,6 +37,7 @@ const en = {
     aiSettings: "AI Settings",
     aiProvider: "AI Provider:",
     lmStudioEndpoint: "LM Studio Endpoint:",
+    openaiApiKey: "OpenAI API Key",
     testConnection: "Test Connection",
     connected: "Connected to LM Studio",
     notConnected: "Not connected",
@@ -48,6 +49,13 @@ const en = {
     language: "Language:",
     portuguese: "Portuguese",
     english: "English",
+    
+    // Modal actions
+    save: "Save",
+    cancel: "Cancel",
+    saving: "Saving...",
+    saved: "Saved",
+    settingsSaved: "Settings saved successfully!",
     
     // Messages
     generating: "Generating crossword puzzle...",
@@ -65,6 +73,56 @@ const en = {
     // Validation
     correct: "Correct!",
     incorrect: "Incorrect",
+    
+    // UI Messages
+    pleaseComplete: "Please complete the word before submitting",
+    incorrectTryAgain: "Incorrect. Try again!",
+    
+    // Notification Messages
+    failedToInitialize: "Failed to initialize application. Please refresh the page.",
+    newPuzzleGenerated: "New puzzle generated successfully!",
+    aiGenerationFailed: "AI puzzle generation failed: {error}. Using fallback puzzle.",
+    failedToGenerate: "Failed to generate puzzle. Please try again.",
+    pleaseSelectWord: "Please select a word first",
+    unexpectedError: "An unexpected error occurred. Please try again.",
+    
+    // AI Connection Messages
+    lmStudioNotAvailable: "LM Studio not available. Automatically connected to OpenAI.",
+    invalidOpenAIKey: "Invalid OpenAI API key. Please check your key in AI settings.",
+    noAIConnection: "No AI connection available. Add an OpenAI API key in AI settings to generate custom puzzles.",
+    openaiConnected: "Successfully connected to OpenAI!",
+    connectionFailed: "Connection failed. Please check your API key.",
+    connectionError: "Error testing connection. Please check your API key.",
+    
+    // Input placeholders
+    typeAnswer: "Type your answer...",
+    enterApiKey: "Enter your API key",
+    
+    // Loading screen
+    connectingAI: "Connecting to AI",
+    generatingTheme: "Generating Theme",
+    buildingGrid: "Building Grid",
+    
+    // Completion modal
+    time: "Time",
+    
+    // Aria Labels
+    settingsAriaLabel: "Settings",
+    aiSettingsAriaLabel: "AI Settings",
+    toggleThemeAriaLabel: "Toggle dark mode",
+    gameStatusAriaLabel: "Game Status",
+    gameProgressAriaLabel: "Game progress",
+    getHintAriaLabel: "Get hint for current word",
+    checkAnswersAriaLabel: "Check current answers",
+    generatePuzzleAriaLabel: "Generate new puzzle",
+    crosswordPuzzleAriaLabel: "Crossword puzzle",
+    crosswordGridAriaLabel: "Crossword puzzle grid",
+    currentWordInputAriaLabel: "Current word input",
+    enterAnswerAriaLabel: "Enter your answer",
+    submitWordAriaLabel: "Submit word",
+    crosswordCluesAriaLabel: "Crossword clues",
+    quickNewPuzzleAriaLabel: "Quick new puzzle",
+    closeAriaLabel: "Close",
     
     // Themes (for AI generation)
     themes: {

@@ -12,11 +12,16 @@ class GridManager {
 
         const grid = this.engine.grid;
         const rows = grid.length;
-        const cols = grid[0].length;
+        const cols = grid[0] ? grid[0].length : 0;
 
-        // Set CSS grid dimensions
-        this.gridElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        this.gridElement.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+        // Set CSS grid dimensions - adaptive to puzzle size
+        const cellSize = `clamp(24px, ${Math.min(3.5, 50/Math.max(rows, cols))}vmin, 40px)`;
+        this.gridElement.style.gridTemplateColumns = `repeat(${cols}, ${cellSize})`;
+        this.gridElement.style.gridTemplateRows = `repeat(${rows}, ${cellSize})`;
+        
+        // Center the grid and ensure it fits in the container
+        this.gridElement.style.justifySelf = 'center';
+        this.gridElement.style.alignSelf = 'center';
 
         // Clear existing grid
         this.gridElement.innerHTML = '';
@@ -36,13 +41,9 @@ class GridManager {
         cell.dataset.row = row;
         cell.dataset.col = col;
 
-        const cellValue = this.engine.getCellValue(row, col);
-        // Fallback for browser cache issues - check if method exists
-        const isBlocked = (typeof this.engine.isCellBlocked === 'function') 
-            ? this.engine.isCellBlocked(row, col)
-            : (cellValue === '#' || cellValue === null);
+        const isBlocked = this.engine.isCellBlocked(row, col);
         
-        if (cellValue === null || isBlocked) {
+        if (isBlocked) {
             // Blocked cell
             cell.classList.add('blocked');
         } else {
@@ -58,15 +59,29 @@ class GridManager {
                 cell.appendChild(numberSpan);
             }
 
-            // Set initial content
+            // Set initial content - show user answer if any
             const userAnswer = this.engine.getUserAnswer(row, col);
             if (userAnswer) {
-                cell.textContent = userAnswer;
+                // If there's a number, preserve it
+                if (cellNumber) {
+                    const numberSpan = cell.querySelector('.cell-number');
+                    cell.textContent = userAnswer;
+                    if (numberSpan) {
+                        cell.appendChild(numberSpan);
+                    }
+                } else {
+                    cell.textContent = userAnswer;
+                }
             }
 
             // Add keyboard event listeners
             cell.addEventListener('keydown', (e) => {
                 this.handleCellKeydown(e, row, col);
+            });
+            
+            // Add click event listener
+            cell.addEventListener('click', (e) => {
+                this.selectCell(row, col);
             });
         }
 
@@ -267,8 +282,8 @@ class GridManager {
     }
 
     clearHighlights() {
-        document.querySelectorAll('.cell.highlighted').forEach(cell => {
-            cell.classList.remove('highlighted');
+        document.querySelectorAll('.cell.highlighted, .cell.active-word').forEach(cell => {
+            cell.classList.remove('highlighted', 'active-word');
         });
     }
 

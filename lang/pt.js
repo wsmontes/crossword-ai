@@ -37,6 +37,7 @@ const pt = {
     aiSettings: "Configurações de IA",
     aiProvider: "Provedor de IA:",
     lmStudioEndpoint: "Endpoint do LM Studio:",
+    openaiApiKey: "Chave API OpenAI",
     testConnection: "Testar Conexão",
     connected: "Conectado ao LM Studio",
     notConnected: "Não conectado",
@@ -48,6 +49,13 @@ const pt = {
     language: "Idioma:",
     portuguese: "Português",
     english: "Inglês",
+    
+    // Modal actions
+    save: "Salvar",
+    cancel: "Cancelar",
+    saving: "Salvando...",
+    saved: "Salvo",
+    settingsSaved: "Configurações salvas com sucesso!",
     
     // Messages
     generating: "Gerando palavra cruzada...",
@@ -65,6 +73,56 @@ const pt = {
     // Validation
     correct: "Correto!",
     incorrect: "Incorreto",
+    
+    // UI Messages
+    pleaseComplete: "Por favor, complete a palavra antes de enviar",
+    incorrectTryAgain: "Incorreto. Tente novamente!",
+    
+    // Notification Messages
+    failedToInitialize: "Falha ao inicializar aplicação. Por favor, atualize a página.",
+    newPuzzleGenerated: "Nova palavra cruzada gerada com sucesso!",
+    aiGenerationFailed: "Falha na geração de IA: {error}. Usando palavra cruzada padrão.",
+    failedToGenerate: "Falha ao gerar palavra cruzada. Por favor, tente novamente.",
+    pleaseSelectWord: "Por favor, selecione uma palavra primeiro",
+    unexpectedError: "Ocorreu um erro inesperado. Por favor, tente novamente.",
+    
+    // AI Connection Messages
+    lmStudioNotAvailable: "LM Studio não disponível. Conectado automaticamente ao OpenAI.",
+    invalidOpenAIKey: "Chave da OpenAI inválida. Verifique sua chave nas configurações de IA.",
+    noAIConnection: "Nenhuma conexão de IA disponível. Adicione uma chave da OpenAI nas configurações de IA para gerar quebra-cabeças personalizados.",
+    openaiConnected: "Conectado com sucesso ao OpenAI!",
+    connectionFailed: "Falha na conexão. Verifique sua chave API.",
+    connectionError: "Erro ao testar conexão. Verifique sua chave API.",
+    
+    // Input placeholders
+    typeAnswer: "Digite sua resposta...",
+    enterApiKey: "Digite sua chave API",
+    
+    // Loading screen
+    connectingAI: "Conectando à IA",
+    generatingTheme: "Gerando Tema", 
+    buildingGrid: "Construindo Grade",
+    
+    // Completion modal
+    time: "Tempo",
+    
+    // Aria Labels
+    settingsAriaLabel: "Configurações",
+    aiSettingsAriaLabel: "Configurações de IA",
+    toggleThemeAriaLabel: "Alternar modo escuro",
+    gameStatusAriaLabel: "Status do Jogo",
+    gameProgressAriaLabel: "Progresso do jogo",
+    getHintAriaLabel: "Obter dica para palavra atual",
+    checkAnswersAriaLabel: "Verificar respostas atuais",
+    generatePuzzleAriaLabel: "Gerar nova palavra cruzada",
+    crosswordPuzzleAriaLabel: "Palavra cruzada",
+    crosswordGridAriaLabel: "Grade da palavra cruzada",
+    currentWordInputAriaLabel: "Entrada da palavra atual",
+    enterAnswerAriaLabel: "Digite sua resposta",
+    submitWordAriaLabel: "Enviar palavra",
+    crosswordCluesAriaLabel: "Pistas da palavra cruzada",
+    quickNewPuzzleAriaLabel: "Nova palavra cruzada rápida",
+    closeAriaLabel: "Fechar",
     
     // Themes (for AI generation)
     themes: {

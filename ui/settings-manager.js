@@ -2,6 +2,7 @@ class SettingsManager {
     constructor() {
         this.storage = new SecureStorage();
         this.settings = this.loadSettings();
+        this.apiKeyInputTimeout = null;
         this.setupEventListeners();
         this.applySettings();
     }
@@ -83,8 +84,14 @@ class SettingsManager {
         const languageSelect = document.getElementById('language-select');
         if (languageSelect) {
             languageSelect.addEventListener('change', (e) => {
-                this.setSetting('language', e.target.value);
-                this.applyLanguageSettings(e.target.value);
+                const lang = e.target.value;
+                this.setSetting('language', lang);
+                this.applyLanguageSettings(lang);
+                
+                // Force immediate UI update
+                if (window.i18n) {
+                    window.i18n.setLanguage(lang);
+                }
             });
         }
 
@@ -100,23 +107,99 @@ class SettingsManager {
 
         const lmstudioEndpoint = document.getElementById('lmstudio-endpoint');
         if (lmstudioEndpoint) {
-            lmstudioEndpoint.addEventListener('change', (e) => {
-                this.setSetting('lmstudioEndpoint', e.target.value);
-                this.dispatchSettingChange('lmstudioEndpoint', e.target.value);
-            });
+            const saveEndpoint = (e) => {
+                const value = e.target.value.trim();
+                this.setSetting('lmstudioEndpoint', value);
+                this.dispatchSettingChange('lmstudioEndpoint', value);
+            };
+            
+            lmstudioEndpoint.addEventListener('change', saveEndpoint);
+            lmstudioEndpoint.addEventListener('blur', saveEndpoint);
         }
 
         const openaiKey = document.getElementById('openai-key');
         if (openaiKey) {
-            openaiKey.addEventListener('change', (e) => {
-                // Store API key securely
-                this.storage.setApiKey('openai', e.target.value);
-                this.dispatchSettingChange('openaiApiKey', e.target.value);
+            // Save on change, input, and blur events to ensure persistence
+            const saveApiKey = (e) => {
+                const value = e.target.value.trim();
+                const statusElement = document.getElementById('openai-key-status');
+                
+                console.log('Saving OpenAI API key...');
+                console.log('Key value:', value ? `${value.substring(0, 8)}...` : 'empty');
+                console.log('Key length:', value ? value.length : 0);
+                
+                if (statusElement) {
+                    statusElement.textContent = window.i18n ? window.i18n.t('saving') : 'Saving...';
+                    statusElement.className = 'input-status visible saving';
+                }
+                
+                if (value) {
+                    this.storage.setApiKey('openai', value);
+                    console.log('API key saved to storage');
+                    
+                    // Verify it was saved
+                    const retrieved = this.storage.getApiKey('openai');
+                    console.log('Verification - retrieved key:', retrieved ? `${retrieved.substring(0, 8)}...` : 'null');
+                } else {
+                    this.storage.clearApiKey('openai');
+                    console.log('API key cleared from storage');
+                }
+                
+                // Show success message briefly
+                setTimeout(() => {
+                    if (statusElement) {
+                        statusElement.textContent = window.i18n ? window.i18n.t('saved') : 'Saved';
+                        statusElement.className = 'input-status visible success';
+                        
+                        // Hide after 2 seconds
+                        setTimeout(() => {
+                            statusElement.className = 'input-status';
+                        }, 2000);
+                    }
+                }, 300);
+                
+                this.updateConnectionInfo();
+                this.dispatchSettingChange('openaiApiKey', value);
+            };
+            
+            openaiKey.addEventListener('change', saveApiKey);
+            openaiKey.addEventListener('blur', saveApiKey);
+            openaiKey.addEventListener('input', (e) => {
+                // Debounced save on input to avoid excessive saves
+                clearTimeout(this.apiKeyInputTimeout);
+                this.apiKeyInputTimeout = setTimeout(() => saveApiKey(e), 1000);
+            });
+        }
+
+        // Clear OpenAI API key button
+        const clearOpenaiKeyBtn = document.getElementById('clear-openai-key-btn');
+        if (clearOpenaiKeyBtn) {
+            clearOpenaiKeyBtn.addEventListener('click', () => {
+                this.clearOpenAIApiKey();
             });
         }
 
         // Settings modal/panel toggle
         this.setupSettingsModal();
+        
+        // Save buttons
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        if (saveSettingsBtn) {
+            saveSettingsBtn.addEventListener('click', () => {
+                this.saveAllSettings();
+                this.closeModal('settings-modal');
+                this.showNotification(window.i18n ? window.i18n.t('settingsSaved') : 'Settings saved!');
+            });
+        }
+        
+        const saveAISettingsBtn = document.getElementById('save-ai-settings-btn');
+        if (saveAISettingsBtn) {
+            saveAISettingsBtn.addEventListener('click', () => {
+                this.saveAllSettings();
+                this.closeModal('ai-settings-modal');
+                this.showNotification(window.i18n ? window.i18n.t('settingsSaved') : 'AI settings saved!');
+            });
+        }
     }
 
     setSetting(key, value) {
@@ -216,40 +299,56 @@ class SettingsManager {
     }
 
     applyAISettings() {
+        // Set AI provider
         const aiProviderSelect = document.getElementById('ai-provider-select');
         if (aiProviderSelect) {
             aiProviderSelect.value = this.settings.aiProvider;
-            this.updateAIProviderUI(this.settings.aiProvider);
         }
 
+        // Set LM Studio endpoint
         const lmstudioEndpoint = document.getElementById('lmstudio-endpoint');
         if (lmstudioEndpoint) {
             lmstudioEndpoint.value = this.settings.lmstudioEndpoint;
         }
 
-        // Load stored API key
+        // Load OpenAI API key from secure storage
         const openaiKey = document.getElementById('openai-key');
         if (openaiKey) {
-            const storedKey = this.storage.getApiKey('openai');
-            if (storedKey) {
-                openaiKey.value = storedKey;
+            try {
+                const storedApiKey = this.storage.getApiKey('openai');
+                console.log('Loading OpenAI API key from storage...');
+                console.log('Loaded key:', storedApiKey ? `${storedApiKey.substring(0, 8)}...` : 'null');
+                console.log('Loaded key length:', storedApiKey ? storedApiKey.length : 0);
+                
+                // Always set the value, even if it's empty
+                openaiKey.value = storedApiKey || '';
+            } catch (error) {
+                console.warn('Failed to load OpenAI API key:', error);
+                openaiKey.value = '';
             }
         }
+
+        // Update UI based on provider
+        this.updateAIProviderUI(this.settings.aiProvider);
+        
+        // Update connection info
+        this.updateConnectionInfo();
     }
 
     updateAIProviderUI(provider) {
         const lmstudioSettings = document.getElementById('lmstudio-settings');
         const openaiSettings = document.getElementById('openai-settings');
         
-        if (lmstudioSettings && openaiSettings) {
-            if (provider === 'openai') {
-                lmstudioSettings.style.display = 'none';
-                openaiSettings.style.display = 'block';
-            } else {
-                lmstudioSettings.style.display = 'block';
-                openaiSettings.style.display = 'none';
-            }
+        if (provider === 'lmstudio') {
+            if (lmstudioSettings) lmstudioSettings.style.display = 'block';
+            if (openaiSettings) openaiSettings.style.display = 'none';
+        } else {
+            if (lmstudioSettings) lmstudioSettings.style.display = 'none';
+            if (openaiSettings) openaiSettings.style.display = 'block';
         }
+        
+        // Update connection info
+        this.updateConnectionInfo();
     }
 
     getFontSizeValue(size) {
@@ -568,5 +667,106 @@ class SettingsManager {
 
     getStorageUsage() {
         return this.storage.getStorageUsage();
+    }
+
+    clearOpenAIApiKey() {
+        // Clear from secure storage
+        this.storage.clearApiKey('openai');
+        
+        // Clear from input field
+        const openaiKey = document.getElementById('openai-key');
+        if (openaiKey) {
+            openaiKey.value = '';
+        }
+        
+        // Update connection info
+        this.updateConnectionInfo();
+        
+        // Dispatch setting change
+        this.dispatchSettingChange('openaiApiKey', '');
+    }
+
+    updateConnectionInfo() {
+        const currentProvider = document.getElementById('current-provider');
+        const apiKeyStatus = document.getElementById('api-key-status-text');
+        
+        if (currentProvider) {
+            const provider = this.settings.aiProvider || 'lmstudio';
+            currentProvider.textContent = provider === 'openai' ? 'OpenAI' : 'LM Studio';
+        }
+        
+        if (apiKeyStatus) {
+            if (this.settings.aiProvider === 'openai') {
+                const apiKey = this.storage.getApiKey('openai');
+                if (apiKey) {
+                    apiKeyStatus.textContent = 'Set';
+                    apiKeyStatus.className = 'info-value success';
+                } else {
+                    apiKeyStatus.textContent = 'Not set';
+                    apiKeyStatus.className = 'info-value error';
+                }
+            } else {
+                apiKeyStatus.textContent = 'N/A';
+                apiKeyStatus.className = 'info-value';
+            }
+        }
+        
+        // Ensure OpenAI API key field is populated when modal is shown
+        const openaiKey = document.getElementById('openai-key');
+        if (openaiKey) {
+            try {
+                const storedApiKey = this.storage.getApiKey('openai');
+                if (storedApiKey && !openaiKey.value) {
+                    openaiKey.value = storedApiKey;
+                }
+            } catch (error) {
+                console.warn('Failed to load OpenAI API key into field:', error);
+            }
+        }
+    }
+    
+    saveAllSettings() {
+        // Save OpenAI API key from input field if present
+        const openaiKey = document.getElementById('openai-key');
+        if (openaiKey && openaiKey.value.trim()) {
+            this.storage.setApiKey('openai', openaiKey.value.trim());
+            
+            // Show visual confirmation
+            const statusElement = document.getElementById('openai-key-status');
+            if (statusElement) {
+                statusElement.textContent = window.i18n ? window.i18n.t('saved') : 'Saved';
+                statusElement.className = 'input-status visible success';
+                setTimeout(() => {
+                    statusElement.className = 'input-status';
+                }, 2000);
+            }
+        }
+        
+        // Save LM Studio endpoint from input field if present
+        const lmstudioEndpoint = document.getElementById('lmstudio-endpoint');
+        if (lmstudioEndpoint && lmstudioEndpoint.value.trim()) {
+            this.setSetting('lmstudioEndpoint', lmstudioEndpoint.value.trim());
+        }
+        
+        // This method saves all current settings and applies them
+        this.saveSettings();
+        this.applySettings();
+    }
+    
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    }
+    
+    showNotification(message) {
+        // Try to use the main app's notification system
+        if (window.crosswordUI && window.crosswordUI.showNotification) {
+            window.crosswordUI.showNotification(message);
+        } else {
+            // Fallback to simple alert or console
+            console.log(message);
+        }
     }
 }

@@ -90,11 +90,28 @@ class SecureStorage {
 
     // Specific methods for common data
     setApiKey(provider, apiKey) {
+        console.log(`SecureStorage: Setting API key for ${provider}`);
+        console.log(`SecureStorage: Key value:`, apiKey ? `${apiKey.substring(0, 8)}...` : 'null');
+        console.log(`SecureStorage: Key length:`, apiKey ? apiKey.length : 0);
+        
         this.set(`api_key_${provider}`, apiKey);
+        
+        // Verify it was stored
+        const stored = this.get(`api_key_${provider}`);
+        console.log(`SecureStorage: Verification - stored key:`, stored ? `${stored.substring(0, 8)}...` : 'null');
     }
 
     getApiKey(provider) {
-        return this.get(`api_key_${provider}`);
+        const key = this.get(`api_key_${provider}`);
+        console.log(`SecureStorage: Getting API key for ${provider}`);
+        console.log(`SecureStorage: Retrieved key:`, key ? `${key.substring(0, 8)}...` : 'null');
+        console.log(`SecureStorage: Retrieved key length:`, key ? key.length : 0);
+        
+        return key;
+    }
+
+    clearApiKey(provider) {
+        this.remove(`api_key_${provider}`);
     }
 
     setEndpoint(provider, endpoint) {
