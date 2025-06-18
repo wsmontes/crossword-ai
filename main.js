@@ -6,6 +6,7 @@ class CrosswordApp {
         this.ui = null;
         this.startTime = null;
         this.hintsUsed = 0;
+        this.currentTheme = null;
         this.init();
     }
 
@@ -18,7 +19,7 @@ class CrosswordApp {
         }
     }
 
-    initializeApp() {
+    async initializeApp() {
         try {
             // Clean up old stored API keys on startup
             this.cleanupSecureStorage();
@@ -38,8 +39,15 @@ class CrosswordApp {
             // Set up event listeners
             this.setupEventListeners();
 
-            // Generate initial puzzle
-            this.generateNewPuzzle();
+            // Show loading screen and try to auto-connect to AI
+            this.showLoadingScreen();
+            await this.autoConnectToAI();
+
+            // Generate initial puzzle automatically
+            await this.generateNewPuzzle();
+
+            // Auto-select the first word when puzzle is ready
+            this.autoSelectFirstWord();
 
             // Add global error handler
             window.addEventListener('error', (event) => {
@@ -58,14 +66,21 @@ class CrosswordApp {
         } catch (error) {
             console.error('Failed to initialize application:', error);
             this.showError('Failed to initialize application. Please refresh the page.');
+        } finally {
+            this.hideLoadingScreen();
         }
     }
 
     setupEventListeners() {
+        const setupButton = (id, fabId, action) => {
+            const btn = document.getElementById(id);
+            if (btn) btn.addEventListener('click', action);
+            const fabBtn = document.getElementById(fabId);
+            if (fabBtn) fabBtn.addEventListener('click', action);
+        };
+
         // New puzzle button
-        document.getElementById('new-puzzle-btn').addEventListener('click', () => {
-            this.generateNewPuzzle();
-        });
+        setupButton('new-puzzle-btn', 'fab-new-puzzle-btn', () => this.generateNewPuzzle());
 
         // Hint button
         document.getElementById('hint-btn').addEventListener('click', () => {
@@ -78,13 +93,35 @@ class CrosswordApp {
         });
 
         // Modal buttons
-        document.getElementById('new-puzzle-modal-btn').addEventListener('click', () => {
-            this.closeModal();
-            this.generateNewPuzzle();
+        const newPuzzleModalBtn = document.getElementById('new-puzzle-modal-btn');
+        if (newPuzzleModalBtn) {
+            newPuzzleModalBtn.addEventListener('click', () => {
+                this.closeModal('congratulations-modal');
+                this.generateNewPuzzle();
+            });
+        }
+
+        // Settings modal
+        setupButton('settings-btn', 'fab-settings-btn', () => this.showModal('settings-modal'));
+
+        document.getElementById('close-settings-modal').addEventListener('click', () => {
+            this.closeModal('settings-modal');
         });
 
-        document.getElementById('close-modal-btn').addEventListener('click', () => {
-            this.closeModal();
+        // AI Settings modal
+        setupButton('ai-settings-btn', 'fab-ai-settings-btn', () => this.showModal('ai-settings-modal'));
+
+        document.getElementById('close-ai-settings-modal').addEventListener('click', () => {
+            this.closeModal('ai-settings-modal');
+        });
+
+        // Clue tabs
+        document.getElementById('across-tab').addEventListener('click', () => {
+            this.switchClueTab('across');
+        });
+
+        document.getElementById('down-tab').addEventListener('click', () => {
+            this.switchClueTab('down');
         });
 
         // Settings
@@ -119,70 +156,75 @@ class CrosswordApp {
         document.addEventListener('settingChanged', (e) => {
             this.handleSettingChange(e.detail.key, e.detail.value);
         });
+
+        // Close modals when clicking outside
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                this.closeModal(e.target.id);
+            }
+        });
     }
 
     async generateNewPuzzle() {
         try {
-            this.showThinking(true);
-            this.startTime = Date.now();
             this.hintsUsed = 0;
-            
-            document.getElementById('status-text').textContent = 'Generating new puzzle...';
-            
-            // Get settings
-            const difficulty = document.getElementById('difficulty-select').value;
-            const gridSize = document.getElementById('grid-size-select').value;
-            
-            let puzzleData;
-            
-            // Try AI generation if connected
-            if (this.llmClient.isConnected) {
-                try {
-                    document.getElementById('status-text').textContent = 'AI is creating your puzzle...';
-                    puzzleData = await this.generateAIPuzzle(difficulty, gridSize);
+            this.startTime = Date.now();
+
+            // First try AI generation
+            const difficulty = this.settingsManager?.getSetting('difficulty') || 'medium';
+            const gridSize = this.settingsManager?.getSetting('gridSize') || 'medium';
+
+            try {
+                console.log('Attempting AI puzzle generation...');
+                const puzzle = await this.generateAIPuzzle(difficulty, gridSize);
+                
+                if (puzzle && puzzle.grid && puzzle.clues) {
+                    console.log('AI puzzle generated successfully');
+                    this.currentTheme = puzzle.theme || 'AI-Generated Puzzle';
+                    this.engine.loadPuzzle(puzzle);
+                    this.ui.renderGrid();
+                    this.ui.renderClues();
                     
-                    // Validate the generated puzzle
-                    const validation = this.validatePuzzleData(puzzleData);
-                    if (!validation.valid) {
-                        console.warn('AI generated invalid puzzle:', validation.errors);
-                        throw new Error('AI generated invalid puzzle structure');
+                    // Auto-select first word
+                    this.autoSelectFirstWord();
+                    
+                    this.hideLoadingScreen();
+                    this.updateThemeDisplay();
+                    return;
                     }
                 } catch (aiError) {
-                    console.warn('AI puzzle generation failed:', aiError);
-                    document.getElementById('status-text').textContent = 'AI generation failed, using built-in puzzle...';
-                    puzzleData = this.engine.generatePredefinedPuzzle(difficulty, gridSize);
-                }
-            } else {
-                puzzleData = this.engine.generatePredefinedPuzzle(difficulty, gridSize);
+                console.log('AI puzzle generation failed:', aiError);
             }
-            
-            // Load puzzle into engine
-            this.engine.loadPuzzle(puzzleData);
-            
-            // Update UI
+
+            // Fallback to predefined puzzle
+            console.log('Using fallback predefined puzzle');
+            try {
+                const fallbackPuzzle = this.engine.generatePredefinedPuzzle();
+                if (fallbackPuzzle) {
+                    this.currentTheme = fallbackPuzzle.theme || 'Simple Words';
+                    this.engine.loadPuzzle(fallbackPuzzle);
             this.ui.renderGrid();
             this.ui.renderClues();
-            this.ui.updateProgress();
-            
-            document.getElementById('status-text').textContent = 'Click on a clue to start solving';
-            this.showThinking(false);
+                    
+                    // Auto-select first word
+                    this.autoSelectFirstWord();
+                    
+                    this.hideLoadingScreen();
+                    this.updateThemeDisplay();
+                    return;
+                }
+            } catch (fallbackError) {
+                console.error('Even fallback puzzle failed:', fallbackError);
+            }
+
+            // Last resort: show error and hide loading
+            this.hideLoadingScreen();
+            this.showErrorMessage('Failed to generate puzzle. Please try again.');
             
         } catch (error) {
             console.error('Error generating puzzle:', error);
-            this.showError('Failed to generate puzzle. Using default puzzle.');
-            this.showThinking(false);
-            
-            // Fallback to default puzzle
-            try {
-                const puzzleData = this.engine.getDefaultPuzzle();
-                this.engine.loadPuzzle(puzzleData);
-                this.ui.renderGrid();
-                this.ui.renderClues();
-                this.ui.updateProgress();
-            } catch (fallbackError) {
-                console.error('Even fallback puzzle failed:', fallbackError);
-                this.showError('Critical error: Unable to load any puzzle. Please refresh the page.');
-            }
+            this.hideLoadingScreen();
+            this.showErrorMessage('An error occurred while generating the puzzle.');
         }
     }
 
@@ -244,26 +286,30 @@ class CrosswordApp {
             
             // Step 1: Generate theme and words
             const themePrompt = window.i18n ? window.i18n.getAIPrompt('themeGeneration') : 
-                `Você é um construtor de palavras cruzadas. Vamos criar uma palavra cruzada temática.
-                
-                Primeiro, sugira um tema interessante e forneça 50 palavras relacionadas a este tema.
-                As palavras devem ser:
-                - Entre 3 e 12 letras
-                - Comuns o suficiente para um quebra-cabeça de dificuldade ${difficulty}
-                - Relacionadas ao tema de maneiras interessantes
-                - Incluir uma mistura de comprimentos para boa construção de grade
-                - Incluir algumas palavras com letras comuns (E, S, T, A, R) para melhores interseções
-                
-                Formate sua resposta como um objeto JSON:
-                {
-                  "theme": "nome do tema",
-                  "description": "breve descrição do tema",
-                  "words": [
-                    "PALAVRA1 - breve explicação",
-                    "PALAVRA2 - breve explicação",
-                    ...
-                  ]
-                }`;
+                `CROSSWORD THEME GENERATOR - PORTUGUESE ONLY
+
+CRITICAL: Output ONLY valid JSON. NO markdown, NO explanations, NO extra text.
+
+Create exactly this structure:
+{"theme":"Nome do Tema","description":"Descrição breve","words":["PALAVRA1 - Descrição","PALAVRA2 - Descrição"]}
+
+Requirements:
+- Theme: Interesting, cohesive topic in Portuguese
+- Words: Exactly 25-30 unique Portuguese words
+- Length: 3-12 letters only
+- Format: "PALAVRA - Explicação simples em português"
+- No duplicates
+- Only letters A-Z (no accents, no special chars)
+- All words must relate to theme
+- All text must be in Portuguese
+
+Sample themes: Animais, Esportes, Comida, Natureza, Ciência, História, Arte, Música, Viagem
+
+Difficulty: ${difficulty}
+
+Output ONLY the JSON object.`;
+            
+            this.updateLoadingStep('ai-generating', window.i18n ? window.i18n.t('aiGenerating') : 'A IA está criando seu quebra-cabeça...');
             
             const themeResponse = await this.llmClient.generatePuzzle(themePrompt);
             console.log('Theme response received:', themeResponse);
@@ -272,6 +318,10 @@ class CrosswordApp {
             if (!theme || !description || !words.length) {
                 throw new Error('Failed to generate valid theme and words');
             }
+            
+            // Store theme immediately for display
+            this.currentTheme = theme;
+            this.updateThemeDisplay && this.updateThemeDisplay();
             
             // Step 2: Analyze words for intersections
             const wordAnalysis = this.analyzeWords(words);
@@ -283,7 +333,9 @@ class CrosswordApp {
             const wordList = wordAnalysis.validWords.map(w => `${w.word} - ${w.description}`).join('\n');
             const availableWordsList = wordAnalysis.validWords.map(w => w.word).join(', ');
             const wordSelectionPrompt = window.i18n ? window.i18n.getAIPrompt('wordSelection') : 
-                `Dessas ${wordAnalysis.validWords.length} palavras do tema "${theme}", selecione EXATAMENTE 20-25 palavras que funcionariam bem em uma palavra cruzada de dificuldade ${difficulty}.
+                `SELETOR DE PALAVRAS PARA PALAVRAS CRUZADAS
+
+CRÍTICO: Use APENAS as palavras da lista fornecida. Não invente palavras novas.
 
 PALAVRAS DISPONÍVEIS PARA SELEÇÃO:
 ${wordList}
@@ -293,17 +345,17 @@ ${availableWordsList}
 
 REGRAS OBRIGATÓRIAS:
 1. Use APENAS as palavras da lista acima - não invente palavras novas
-2. Selecione entre 20-25 palavras
+2. Selecione EXATAMENTE 20-25 palavras
 3. Inclua uma mistura de comprimentos (3-12 letras)
 4. Prefira palavras com letras comuns (A, E, I, O, S, T, R, N)
 5. Mantenha relevância com o tema "${theme}"
+6. Todas as pistas devem ser em português
+7. As pistas devem ser apropriadas para dificuldade ${difficulty}
 
 Para cada palavra selecionada, forneça:
-1. Uma pista inteligente em português, apropriada para dificuldade ${difficulty}
+1. Uma pista inteligente em português
 2. O comprimento exato da palavra
-3. Uma breve explicação de por que esta palavra funciona bem
-
-CRÍTICO: Use apenas palavras da lista fornecida. Qualquer palavra não listada será rejeitada.
+3. Uma breve explicação em português de por que esta palavra funciona bem
 
 Formate sua resposta como um objeto JSON válido:
 {
@@ -312,10 +364,10 @@ Formate sua resposta como um objeto JSON válido:
       "word": "PALAVRA_DA_LISTA",
       "clue": "pista inteligente em português",
       "length": número_exato,
-      "reason": "por que esta palavra funciona bem"
+      "reason": "explicação em português"
     }
   ],
-  "explanation": "Breve explicação da estratégia de seleção de palavras"
+  "explanation": "Breve explicação da estratégia de seleção de palavras em português"
 }`;
             
             const selectionResponse = await this.llmClient.generatePuzzle(wordSelectionPrompt);
@@ -978,127 +1030,229 @@ Formate sua resposta como um objeto JSON válido:
     }
 
     async parseThemeResponse(response) {
+        try {
         console.log('Parsing theme response:', response);
         
-        try {
-            // First try to extract JSON from markdown code blocks
-            const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-            const jsonStr = jsonMatch ? jsonMatch[1] : response;
+            // Extract JSON from response (handle markdown code blocks)
+            let jsonStr = response.trim();
+            if (jsonStr.startsWith('```json')) {
+                jsonStr = jsonStr.replace(/```json\s*/, '').replace(/```\s*$/, '');
+            } else if (jsonStr.startsWith('```')) {
+                jsonStr = jsonStr.replace(/```\s*/, '').replace(/```\s*$/, '');
+            }
             
+            // Clean up common JSON issues
+            jsonStr = this.cleanupJsonString(jsonStr);
+            
+            let themeData;
             try {
-                // Clean the JSON string of any control characters
-                const cleanJsonStr = jsonStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-                    .replace(/[\u2018\u2019]/g, "'")  // Replace smart quotes
-                    .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
-                    .replace(/[\u2013\u2014]/g, '-'); // Replace em/en dashes
-                
-                const data = JSON.parse(cleanJsonStr);
-                
-                if (!data.theme || !data.description || !Array.isArray(data.words)) {
-                    console.error('Invalid theme response format - missing required fields');
-                    return null;
-                }
-                
-                // Clean and validate words
-                const validWords = data.words
-                    .map(word => {
-                        if (typeof word !== 'string') return null;
-                        const [wordPart, ...descParts] = word.split(' - ');
-                        if (!wordPart) return null;
-                        return {
-                            word: wordPart.trim().toUpperCase(),
-                            description: descParts.join(' - ').trim()
-                        };
-                    })
-                    .filter(word => word && word.word.length >= 3);
-                
-                if (validWords.length < 10) {
-                    console.error('Not enough valid words in theme response');
-                    return null;
-                }
-                
-                console.log('Parsing results:', {
-                    theme: data.theme,
-                    description: data.description,
-                    wordCount: validWords.length,
-                    words: validWords
-                });
-                
-                return {
-                    theme: data.theme,
-                    description: data.description,
-                    words: validWords.map(w => `${w.word} - ${w.description}`)
-                };
+                themeData = JSON.parse(jsonStr);
             } catch (parseError) {
-                console.log('JSON parsing failed, asking AI to fix the response');
+                console.error('JSON parse failed, attempting manual extraction:', parseError);
                 
-                const expectedFormat = `{
-  "theme": "Theme name",
-  "description": "Brief theme description",
-  "words": [
-    "WORD1 - brief explanation",
-    "WORD2 - brief explanation",
-    ...
-  ]
-}`;
+                // Try to manually extract theme, description, and words
+                const themeMatch = jsonStr.match(/"theme":\s*"([^"]+)"/);
+                const descMatch = jsonStr.match(/"description":\s*"([^"]+)"/);
+                const wordsMatch = jsonStr.match(/"words":\s*\[(.*?)\]/s);
                 
-                const context = 'This is a theme response for a crossword puzzle, including the theme name, description, and a list of related words with their explanations.';
-                
-                const fixedResponse = await this.fixMalformedResponse(response, expectedFormat, context);
-                console.log('Fixed theme response received:', fixedResponse);
-                
-                // Try parsing the fixed response
-                const fixedJsonMatch = fixedResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-                const fixedJsonStr = fixedJsonMatch ? fixedJsonMatch[1] : fixedResponse;
-                
-                // Clean the fixed JSON string
-                const cleanFixedJsonStr = fixedJsonStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-                    .replace(/[\u2018\u2019]/g, "'")
-                    .replace(/[\u201C\u201D]/g, '"')
-                    .replace(/[\u2013\u2014]/g, '-');
-                
-                const fixedData = JSON.parse(cleanFixedJsonStr);
-                
-                if (!fixedData.theme || !fixedData.description || !Array.isArray(fixedData.words)) {
-                    console.error('Invalid fixed theme response format');
-                    return null;
+                if (!themeMatch || !wordsMatch) {
+                    throw new Error('Could not extract theme data from malformed JSON');
                 }
                 
-                // Clean and validate words from fixed response
-                const validFixedWords = fixedData.words
-                    .map(word => {
-                        if (typeof word !== 'string') return null;
-                        const [wordPart, ...descParts] = word.split(' - ');
-                        if (!wordPart) return null;
-                        return {
-                            word: wordPart.trim().toUpperCase(),
-                            description: descParts.join(' - ').trim()
-                        };
-                    })
-                    .filter(word => word && word.word.length >= 3);
+                // Parse words manually
+                const wordsContent = wordsMatch[1];
+                const wordEntries = [];
+                let currentEntry = '';
+                let insideQuotes = false;
                 
-                if (validFixedWords.length < 10) {
-                    console.error('Not enough valid words in fixed theme response');
-                    return null;
+                for (let i = 0; i < wordsContent.length; i++) {
+                    const char = wordsContent[i];
+                    
+                    if (char === '"' && (i === 0 || wordsContent[i-1] !== '\\')) {
+                        insideQuotes = !insideQuotes;
+                        currentEntry += char;
+                    } else if (char === ',' && !insideQuotes) {
+                        if (currentEntry.trim()) {
+                            wordEntries.push(currentEntry.trim().replace(/^"/, '').replace(/"$/, ''));
+                        }
+                        currentEntry = '';
+                    } else if (char !== '\n' && char !== '\r' || insideQuotes) {
+                        currentEntry += char;
+                    }
                 }
                 
-                console.log('Fixed parsing results:', {
-                    theme: fixedData.theme,
-                    description: fixedData.description,
-                    wordCount: validFixedWords.length,
-                    words: validFixedWords
-                });
+                if (currentEntry.trim()) {
+                    wordEntries.push(currentEntry.trim().replace(/^"/, '').replace(/"$/, ''));
+                }
                 
-                return {
-                    theme: fixedData.theme,
-                    description: fixedData.description,
-                    words: validFixedWords.map(w => `${w.word} - ${w.description}`)
+                themeData = {
+                    theme: themeMatch[1],
+                    description: descMatch ? descMatch[1] : '',
+                    words: wordEntries.filter(w => w.includes(' - '))
                 };
             }
-        } catch (e) {
-            console.error('Error parsing theme response:', e);
+            
+            // Validate required fields
+            if (!themeData.theme || !themeData.words || !Array.isArray(themeData.words)) {
+                throw new Error('Invalid theme data structure');
+            }
+            
+            // Clean up and deduplicate words
+            const cleanWords = this.cleanupWordList(themeData.words);
+            
+            if (cleanWords.length === 0) {
+                throw new Error('No valid words found in theme data');
+            }
+                
+                return {
+                theme: themeData.theme,
+                description: themeData.description || '',
+                words: cleanWords
+            };
+            
+        } catch (error) {
+            console.error('Error parsing theme response:', error);
             return null;
         }
+    }
+
+    // Clean up common JSON formatting issues
+    cleanupJsonString(jsonStr) {
+        // Remove markdown formatting
+        jsonStr = jsonStr.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+        
+        // Remove any trailing content after the main JSON object
+        const firstBrace = jsonStr.indexOf('{');
+        if (firstBrace !== -1) {
+            let braceCount = 0;
+            let jsonEnd = -1;
+            
+            for (let i = firstBrace; i < jsonStr.length; i++) {
+                if (jsonStr[i] === '{') braceCount++;
+                else if (jsonStr[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                        jsonEnd = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (jsonEnd !== -1) {
+                jsonStr = jsonStr.substring(firstBrace, jsonEnd + 1);
+            }
+        }
+        
+        // Remove trailing commas before closing brackets/braces
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+        
+        // Fix common quote issues
+        jsonStr = jsonStr.replace(/'/g, '"'); // Replace single quotes with double quotes
+        
+        // Fix duplicate/malformed word entries
+        const wordsMatch = jsonStr.match(/"words":\s*\[(.*?)\]/s);
+        if (wordsMatch) {
+            let wordsContent = wordsMatch[1];
+            
+            // Split by commas but be careful with commas inside quoted strings
+            const wordEntries = [];
+            let currentEntry = '';
+            let insideQuotes = false;
+            let escapeNext = false;
+            
+            for (let i = 0; i < wordsContent.length; i++) {
+                const char = wordsContent[i];
+                
+                if (escapeNext) {
+                    currentEntry += char;
+                    escapeNext = false;
+                    continue;
+                }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    currentEntry += char;
+                    continue;
+                }
+                
+                if (char === '"') {
+                    insideQuotes = !insideQuotes;
+                    currentEntry += char;
+                    continue;
+                }
+                
+                if (char === ',' && !insideQuotes) {
+                    if (currentEntry.trim()) {
+                        wordEntries.push(currentEntry.trim());
+                    }
+                    currentEntry = '';
+                    continue;
+                }
+                
+                currentEntry += char;
+            }
+            
+            // Add the last entry
+            if (currentEntry.trim()) {
+                wordEntries.push(currentEntry.trim());
+            }
+            
+            // Clean and deduplicate entries
+            const cleanEntries = [...new Set(wordEntries.filter(entry => 
+                entry.startsWith('"') && entry.endsWith('"') && entry.includes(' - ')
+            ))];
+            
+            // Reconstruct the words array
+            const cleanWordsArray = '[\n    ' + cleanEntries.join(',\n    ') + '\n  ]';
+            jsonStr = jsonStr.replace(/"words":\s*\[.*?\]/s, `"words": ${cleanWordsArray}`);
+        }
+        
+        return jsonStr;
+    }
+
+    // Clean up and deduplicate word list
+    cleanupWordList(words) {
+        const seenWords = new Set();
+        const cleanWords = [];
+        
+        for (const wordEntry of words) {
+            if (typeof wordEntry !== 'string') continue;
+            
+            // Parse word entry (format: "WORD - Description")
+            const parts = wordEntry.split(' - ');
+            if (parts.length < 2) continue;
+            
+            // Clean and normalize word
+            const word = parts[0].trim()
+                .replace(/[–—]/g, '-')  // Replace en/em dashes with regular hyphen
+                .replace(/[áàãâä]/gi, 'A')  // Normalize accented A
+                .replace(/[éèêë]/gi, 'E')  // Normalize accented E
+                .replace(/[íìîï]/gi, 'I')  // Normalize accented I
+                .replace(/[óòõôö]/gi, 'O')  // Normalize accented O
+                .replace(/[úùûü]/gi, 'U')  // Normalize accented U
+                .replace(/[ç]/gi, 'C')  // Normalize C with cedilla
+                .toUpperCase();
+            
+            const description = parts.slice(1).join(' - ').trim();
+            
+            // Skip invalid entries
+            if (!word || word.length < 3 || word.length > 15 || seenWords.has(word)) {
+                continue;
+            }
+            
+            // Only include words with letters, hyphens, and spaces
+            if (!/^[A-Z\s-]+$/.test(word)) {
+                continue;
+            }
+            
+            seenWords.add(word);
+            cleanWords.push(`${word} - ${description}`);
+            
+            // Limit to reasonable number of words
+            if (cleanWords.length >= 50) break;
+        }
+        
+        return cleanWords;
     }
 
     async validatePuzzleWithAI(puzzle) {
@@ -1367,70 +1521,74 @@ Formate sua resposta como um objeto JSON válido:
         if (correct === total) {
             this.handlePuzzleComplete();
         } else {
-            document.getElementById('status-text').textContent = 
-                `${correct} of ${total} words correct`;
+            const statusText = document.getElementById('status-text');
+            if (statusText) statusText.textContent = 'Verificando respostas...';
         }
     }
 
     handlePuzzleComplete() {
         const endTime = Date.now();
-        const totalTime = Math.floor((endTime - this.startTime) / 1000);
-        const minutes = Math.floor(totalTime / 60);
-        const seconds = totalTime % 60;
+        const timeTaken = Math.round((endTime - this.startTime) / 1000);
+        const minutes = Math.floor(timeTaken / 60);
+        const seconds = timeTaken % 60;
         
-        document.getElementById('final-time').textContent = 
-            `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('final-time').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         document.getElementById('final-hints').textContent = this.hintsUsed;
         
-        this.showModal();
+        this.showModal('congratulations-modal');
     }
 
     handleProviderChange(provider) {
         this.llmClient.setProvider(provider);
         
-        const lmstudioSettings = document.getElementById('lmstudio-settings');
-        const openaiSettings = document.getElementById('openai-settings');
+        // Show/hide relevant settings
+        const lmstudio = document.getElementById('lmstudio-settings');
+        const openai = document.getElementById('openai-settings');
         
-        if (provider === 'openai') {
-            lmstudioSettings.style.display = 'none';
-            openaiSettings.style.display = 'block';
+        if (provider === 'lmstudio') {
+            if (lmstudio) lmstudio.style.display = 'block';
+            if (openai) openai.style.display = 'none';
         } else {
-            lmstudioSettings.style.display = 'block';
-            openaiSettings.style.display = 'none';
+            if (lmstudio) lmstudio.style.display = 'none';
+            if (openai) openai.style.display = 'block';
         }
         
         this.updateConnectionStatus();
     }
 
     async testAIConnection() {
+        const testBtn = document.getElementById('test-connection-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        
+        if (testBtn) {
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+        }
+        
         try {
-            document.getElementById('test-connection-btn').disabled = true;
-            document.getElementById('test-connection-btn').innerHTML = 
-                '<i class="fas fa-spinner fa-spin"></i> Testing...';
-            
-            // Set connection parameters
-            if (this.llmClient.provider === 'openai') {
-                const apiKey = document.getElementById('openai-key').value;
-                this.llmClient.setOpenAIApiKey(apiKey);
-            } else {
-                const endpoint = document.getElementById('lmstudio-endpoint').value;
-                this.llmClient.setEndpoint(endpoint);
-            }
-            
             const result = await this.llmClient.testConnection();
             
-            if (result.success) {
-                this.updateConnectionStatus(true, result.message);
-            } else {
-                this.updateConnectionStatus(false, result.message);
+            if (connectionStatus) {
+                connectionStatus.className = result.success ? 
+                    'connection-status connected' : 'connection-status';
+                connectionStatus.innerHTML = `
+                    <i class="fas fa-circle connection-dot"></i>
+                    ${result.message}
+                `;
             }
-            
         } catch (error) {
-            this.updateConnectionStatus(false, error.message);
+            if (connectionStatus) {
+                connectionStatus.className = 'connection-status';
+                connectionStatus.innerHTML = `
+                    <i class="fas fa-circle connection-dot"></i>
+                    Connection failed: ${error.message}
+                `;
+            }
         } finally {
-            document.getElementById('test-connection-btn').disabled = false;
-            document.getElementById('test-connection-btn').innerHTML = 
-                '<i class="fas fa-wifi"></i> Test Connection';
+            if (testBtn) {
+                testBtn.disabled = false;
+                testBtn.innerHTML = '<i class="fas fa-wifi"></i> <span data-lang="testConnection">Testar Conexão</span>';
+            }
         }
     }
 
@@ -1448,50 +1606,70 @@ Formate sua resposta como um objeto JSON válido:
         }
     }
 
-    handleKeyboardShortcuts(event) {
-        // Ctrl/Cmd + N: New puzzle
-        if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
-            event.preventDefault();
+    handleKeyboardShortcuts(e) {
+        // Esc key to close modals
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                this.closeModal(modal.id);
+            });
+        }
+        
+        // Ctrl+N for new puzzle
+        if (e.ctrlKey && e.key === 'n') {
+            e.preventDefault();
             this.generateNewPuzzle();
         }
         
-        // Ctrl/Cmd + H: Get hint
-        if ((event.ctrlKey || event.metaKey) && event.key === 'h') {
-            event.preventDefault();
+        // Ctrl+H for hint
+        if (e.ctrlKey && e.key === 'h') {
+            e.preventDefault();
             this.getHint();
         }
         
-        // Escape: Clear selection
-        if (event.key === 'Escape') {
-            this.ui.clearSelection();
+        // Tab to switch between across/down clues
+        if (e.key === 'Tab' && e.target.closest('.clues-section')) {
+            e.preventDefault();
+            const currentTab = document.querySelector('.clues-tab.active');
+            const nextDirection = currentTab?.id === 'across-tab' ? 'down' : 'across';
+            this.switchClueTab(nextDirection);
         }
     }
 
-    showThinking(show) {
-        const indicator = document.getElementById('thinking-indicator');
-        if (show) {
-            indicator.classList.add('active');
-        } else {
-            indicator.classList.remove('active');
+    showThinking(isThinking) {
+        const thinkingIndicator = document.getElementById('thinking-indicator');
+        if (thinkingIndicator) {
+            if (isThinking) {
+                thinkingIndicator.classList.add('active');
+            } else {
+                thinkingIndicator.classList.remove('active');
+            }
         }
     }
 
     showError(message) {
-        // Simple error display - could be enhanced with a proper notification system
-        document.getElementById('status-text').textContent = message;
-        document.getElementById('status-text').style.color = 'var(--danger-color)';
-        
-        setTimeout(() => {
-            document.getElementById('status-text').style.color = '';
-        }, 3000);
+        const statusText = document.getElementById('status-text');
+        if (statusText) {
+            statusText.textContent = message;
+            statusText.style.color = 'var(--danger-color)';
+            setTimeout(() => {
+                if (statusText) statusText.style.color = '';
+            }, 5000);
+        }
+        console.error('User Error:', message);
     }
 
-    showModal() {
-        document.getElementById('congratulations-modal').classList.add('active');
+    showModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.add('active');
+        }
     }
 
-    closeModal() {
-        document.getElementById('congratulations-modal').classList.remove('active');
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+        }
     }
 
     cleanupSecureStorage() {
@@ -1511,25 +1689,238 @@ Formate sua resposta como um objeto JSON válido:
     }
 
     handleSettingChange(key, value) {
-        switch (key) {
-            case 'aiProvider':
+        if (key === 'aiProvider') {
                 this.llmClient.setProvider(value);
-                break;
-            case 'lmstudioEndpoint':
+        } else if (key === 'lmstudioEndpoint') {
                 this.llmClient.setEndpoint(value);
-                break;
-            case 'openaiApiKey':
-                this.llmClient.setOpenAIApiKey(value);
-                break;
-            case 'difficulty':
-                this.engine.setDifficulty(value);
-                break;
-            case 'gridSize':
-                this.engine.setGridSize(value);
-                break;
         }
+    }
+
+    // Auto-connect to available AI models (prefer local)
+    async autoConnectToAI() {
+        try {
+            // First try LM Studio (local)
+            this.llmClient.setProvider('lmstudio');
+            let result = await this.llmClient.testConnection();
+            
+            if (result.success) {
+                this.updateConnectionStatus(true, 'Connected to LM Studio');
+                console.log('Auto-connected to LM Studio');
+                return;
+            }
+
+            // If LM Studio fails, try OpenAI if API key exists
+            const storage = new SecureStorage();
+            const openaiKey = storage.getApiKey('openai');
+            
+            if (openaiKey) {
+                this.llmClient.setProvider('openai');
+                this.llmClient.setOpenAIApiKey(openaiKey);
+                result = await this.llmClient.testConnection();
+                
+                if (result.success) {
+                    this.updateConnectionStatus(true, 'Connected to OpenAI');
+                    console.log('Auto-connected to OpenAI');
+                    return;
+                }
+            }
+
+            // No connection available
+            this.updateConnectionStatus(false, 'No AI connection available');
+            console.log('No AI connections available');
+            
+        } catch (error) {
+            console.warn('Auto-connection failed:', error);
+            this.updateConnectionStatus(false, 'Connection failed');
+        }
+    }
+
+    // Show loading screen with animation
+    showLoadingScreen() {
+        const loadingHTML = `
+            <div class="loading-screen" id="loading-screen">
+                <div class="loading-content">
+                    <div class="loading-icon">
+                        <i class="fas fa-puzzle-piece fa-3x loading-pulse"></i>
+                    </div>
+                    <h2>Initializing Crossword AI</h2>
+                    <div class="loading-steps">
+                        <div class="loading-step active" id="step-1">
+                            <i class="fas fa-robot"></i>
+                            <span>Connecting to AI...</span>
+                        </div>
+                        <div class="loading-step" id="step-2">
+                            <i class="fas fa-brain"></i>
+                            <span>Generating puzzle...</span>
+                        </div>
+                        <div class="loading-step" id="step-3">
+                            <i class="fas fa-play"></i>
+                            <span>Ready to play!</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', loadingHTML);
+    }
+
+    // Hide loading screen
+    hideLoadingScreen() {
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.style.opacity = '0';
+            setTimeout(() => {
+                loadingScreen.remove();
+            }, 500);
+        }
+    }
+
+    // Update loading step
+    updateLoadingStep(stepId, message) {
+        if (typeof stepId === 'number') {
+            // Old numeric step system
+            const steps = document.querySelectorAll('.loading-step');
+            steps.forEach((step, index) => {
+                if (index < stepId) {
+                    step.classList.add('completed');
+                    step.classList.remove('active');
+                } else if (index === stepId - 1) {
+                    step.classList.add('active');
+                    step.classList.remove('completed');
+                } else {
+                    step.classList.remove('active', 'completed');
+                }
+            });
+        } else {
+            // New string-based step system
+            const stepMapping = {
+                'connecting': 1,
+                'ai-generating': 2,
+                'ready': 3
+            };
+            
+            const stepNumber = stepMapping[stepId] || 1;
+            const steps = document.querySelectorAll('.loading-step');
+            
+            steps.forEach((step, index) => {
+                if (index < stepNumber - 1) {
+                    step.classList.add('completed');
+                    step.classList.remove('active');
+                } else if (index === stepNumber - 1) {
+                    step.classList.add('active');
+                    step.classList.remove('completed');
+                    
+                    // Update message if provided
+                    if (message) {
+                        const stepText = step.querySelector('span');
+                        if (stepText) {
+                            stepText.textContent = message;
+                        }
+                    }
+                } else {
+                    step.classList.remove('active', 'completed');
+                }
+            });
+        }
+    }
+
+    // Auto-select the first word for better UX
+    autoSelectFirstWord() {
+        try {
+            // Find the first across clue
+            const puzzle = this.engine.currentPuzzle;
+            if (puzzle && puzzle.clues && puzzle.clues.across && puzzle.clues.across.length > 0) {
+                const firstClue = puzzle.clues.across[0];
+                if (firstClue && this.ui) {
+                    // Select the first word
+                    this.ui.selectWord(firstClue.number, 'across');
+                }
+            }
+        } catch (error) {
+            console.warn('Could not auto-select first word:', error);
+        }
+    }
+
+    // Update theme display in header
+    updateThemeDisplay() {
+        const themeTitle = document.getElementById('theme-title');
+        const currentClueSubtitle = document.getElementById('current-clue-subtitle');
+        
+        // Update theme title
+        if (themeTitle && this.currentTheme) {
+            themeTitle.textContent = this.currentTheme;
+        }
+
+        // Update current clue subtitle when word is selected
+        if (this.ui && this.ui.currentWord && currentClueSubtitle) {
+            const clue = this.engine.getClue(this.ui.currentWord.number, this.ui.currentWord.direction);
+            if (clue) {
+                currentClueSubtitle.textContent = `${this.ui.currentWord.number} ${this.ui.currentWord.direction.toUpperCase()}: ${clue}`;
+            }
+        } else if (currentClueSubtitle && !this.ui?.currentWord) {
+            currentClueSubtitle.textContent = window.i18n ? window.i18n.t('clickClueToStart') : 'Clique em uma pista para começar a resolver';
+        }
+    }
+
+    // Switch between clue tabs
+    switchClueTab(direction) {
+        // Update tab buttons
+        document.querySelectorAll('.clues-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.getElementById(`${direction}-tab`).classList.add('active');
+
+        // Update clue lists
+        document.querySelectorAll('.clues-list').forEach(list => {
+            list.classList.remove('active');
+        });
+        document.getElementById(`${direction}-clues`).classList.add('active');
+    }
+
+    // Update progress circle
+    updateProgressCircle() {
+        const progress = this.engine.getProgress();
+        const progressRing = document.getElementById('progress-ring');
+        const progressText = document.getElementById('progress-text');
+        const wordsCompleted = document.getElementById('words-completed');
+        const wordsTotal = document.getElementById('words-total');
+
+        if (progressRing && progressText) {
+            const circumference = 2 * Math.PI * 25; // radius = 25
+            const offset = circumference - (progress.percentage / 100) * circumference;
+            
+            progressRing.style.strokeDashoffset = offset;
+            progressText.textContent = `${progress.percentage}%`;
+        }
+
+        if (wordsCompleted && wordsTotal) {
+            wordsCompleted.textContent = progress.completed;
+            wordsTotal.textContent = progress.total;
+        }
+    }
+
+    // Show error message to user
+    showErrorMessage(message) {
+        const statusText = document.getElementById('status-text');
+        if (statusText) {
+            statusText.textContent = message;
+            statusText.style.color = 'var(--danger-color)';
+            
+            // Reset color after a few seconds
+            setTimeout(() => {
+                if (statusText) {
+                    statusText.style.color = '';
+                }
+            }, 5000);
+        }
+        
+        console.error('User Error:', message);
     }
 }
 
-// Initialize the application
-new CrosswordApp();
+// Initialize the app
+const app = new CrosswordApp();
+
+// Make app globally accessible for UI components
+window.app = app;

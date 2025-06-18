@@ -10,59 +10,79 @@
 </head>
 <body>
     <div class="game-app">
-        <!-- Theme and Current Clue Info -->
-        <div class="theme-info" id="theme-info" style="margin: 2rem auto 1rem auto; max-width: 700px; text-align: center;">
-            <div class="theme-title" id="theme-title">Mundo da Música</div>
-            <div class="current-clue-subtitle" id="current-clue-subtitle">2 ACROSS: Instrumento eletrônico que produz som</div>
-        </div>
-
-        <!-- Progress and Actions Row -->
-        <div class="top-actions" style="display: flex; align-items: center; justify-content: space-between; max-width: 1100px; margin: 0 auto 1.5rem auto;">
-            <div class="progress-display">
-                <div class="progress-circle">
-                    <svg class="progress-ring" width="60" height="60">
-                        <circle class="progress-ring-background" cx="30" cy="30" r="25"></circle>
-                        <circle class="progress-ring-fill" cx="30" cy="30" r="25" id="progress-ring"></circle>
-                    </svg>
-                    <div class="progress-text" id="progress-text">0%</div>
-                </div>
-                <div class="progress-stats">
-                    <span id="words-completed">0</span>/<span id="words-total">0</span>
+        <!-- Top Navigation Bar -->
+        <header class="game-header">
+            <div class="header-left">
+                <h1><i class="fas fa-puzzle-piece"></i> <span data-lang="title">Palavras Cruzadas AI</span></h1>
+                <div class="theme-info" id="theme-info">
+                    <div class="theme-title" id="theme-title">Mundo da Natureza</div>
+                    <div class="current-clue-subtitle" id="current-clue-subtitle">1 ACROSS: Objeto de leitura e conhecimento</div>
                 </div>
             </div>
+            
+            <div class="header-center">
+                <div class="game-status">
+                    <span id="status-text" data-lang="readyToPlay">Pronto para jogar!</span>
+                    <div class="thinking-indicator" id="thinking-indicator">
+                        <i class="fas fa-cog fa-spin"></i>
+                        <span data-lang="generating">Gerando palavra cruzada...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <div class="progress-display">
+                    <div class="progress-circle">
+                        <svg class="progress-ring" width="60" height="60">
+                            <circle class="progress-ring-background" cx="30" cy="30" r="25"></circle>
+                            <circle class="progress-ring-fill" cx="30" cy="30" r="25" id="progress-ring"></circle>
+                        </svg>
+                        <div class="progress-text" id="progress-text">0%</div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="words-completed">0</span>/<span id="words-total">0</span>
+                    </div>
+                </div>
+                
+                <div class="header-actions">
+                    <button class="btn btn-icon" id="settings-btn" title="Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="btn btn-icon" id="ai-settings-btn" title="AI Settings">
+                        <i class="fas fa-robot"></i>
+                    </button>
+                    <button class="btn btn-primary" id="new-puzzle-btn">
+                        <i class="fas fa-plus"></i>
+                        <span data-lang="newPuzzle">Nova Palavra Cruzada</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="game-main">
+            <!-- Game Actions Bar -->
             <div class="game-actions">
                 <button class="btn btn-secondary" id="hint-btn">
                     <i class="fas fa-lightbulb"></i>
-                    <span data-lang="hint">Dica</span>
+                    <span data-lang="getHint">Obter Dica</span>
                 </button>
                 <button class="btn btn-secondary" id="check-btn">
                     <i class="fas fa-check"></i>
                     <span data-lang="checkAnswers">Verificar</span>
                 </button>
-                <button class="btn btn-icon" id="settings-btn" title="Settings">
-                    <i class="fas fa-cog"></i>
-                </button>
-                <button class="btn btn-icon" id="ai-settings-btn" title="AI Settings">
-                    <i class="fas fa-robot"></i>
-                </button>
-                <button class="btn btn-primary" id="new-puzzle-btn">
-                    <i class="fas fa-plus"></i>
-                    <span data-lang="newPuzzle">Nova Palavra Cruzada</span>
-                </button>
             </div>
-        </div>
 
-        <!-- Main Game Area -->
-        <main class="game-main">
             <!-- Puzzle Area -->
             <div class="puzzle-area">
                 <!-- Crossword Grid -->
                 <div class="grid-section">
                     <div class="crossword-grid-container">
                         <div class="crossword-grid" id="crossword-grid">
-                            <!-- Grid will be populated here -->
+                            <!-- Grid will be generated dynamically -->
                         </div>
                     </div>
+                    
                     <!-- Current Word Input -->
                     <div class="current-word-display" id="current-word-display">
                         <div class="word-info">
@@ -91,6 +111,7 @@
                             <span data-lang="down">Verticais</span>
                         </button>
                     </div>
+                    
                     <div class="clues-content">
                         <div class="clues-list active" id="across-clues">
                             <!-- Across clues will be populated here -->
@@ -240,23 +261,21 @@
         </div>
     </div>
 
-    <!-- Scripts - Language files first -->
-    <script src="lang/pt.js?v=2024061725"></script>
-    <script src="lang/en.js?v=2024061725"></script>
-    <script src="lang/language-manager.js?v=2024061725"></script>
-    
-    <!-- Core scripts -->
-    <script src="secure-storage.js?v=2024061725"></script>
-    <script src="llm-client.js?v=2024061725"></script>
-    <script src="llm-prompts.js?v=2024061725"></script>
-    <script src="crossword-engine.js?v=2024061725"></script>
-    <script src="utils/crossword-utils.js?v=2024061725"></script>
-    <script src="ui/grid-manager.js?v=2024061725"></script>
-    <script src="ui/clue-manager.js?v=2024061725"></script>
-    <script src="ui/input-handler.js?v=2024061725"></script>
-    <script src="ui/progress-tracker.js?v=2024061725"></script>
-    <script src="ui/settings-manager.js?v=2024061725"></script>
-    <script src="crossword-ui.js?v=2024061725"></script>
-    <script src="main.js?v=2024061725"></script>
+    <!-- Scripts -->
+    <script src="lang/pt.js"></script>
+    <script src="lang/en.js"></script>
+    <script src="lang/language-manager.js"></script>
+    <script src="secure-storage.js"></script>
+    <script src="llm-client.js"></script>
+    <script src="llm-prompts.js"></script>
+    <script src="crossword-engine.js"></script>
+    <script src="utils/crossword-utils.js"></script>
+    <script src="ui/grid-manager.js"></script>
+    <script src="ui/clue-manager.js"></script>
+    <script src="ui/input-handler.js"></script>
+    <script src="ui/progress-tracker.js"></script>
+    <script src="ui/settings-manager.js"></script>
+    <script src="crossword-ui.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>

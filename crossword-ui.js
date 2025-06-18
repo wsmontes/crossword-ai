@@ -166,7 +166,13 @@ class CrosswordUI {
         const clueElement = document.querySelector(`[data-number="${number}"][data-direction="${direction}"]`);
         if (clueElement) {
             clueElement.classList.add('active');
-            clueElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Remove the scroll behavior to keep focus on the puzzle
+            // clueElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Update the theme display in the header
+        if (window.app && window.app.updateThemeDisplay) {
+            window.app.updateThemeDisplay();
         }
     }
 
@@ -277,8 +283,68 @@ class CrosswordUI {
         
         if (isCorrect) {
             this.markWordAsCompleted(number, direction);
+            this.updateProgress();
+            
+            // Check if puzzle is complete
+            if (this.checkPuzzleCompletion()) {
+                return; // Don't auto-advance if puzzle is complete
+            }
+            
+            // Auto-advance to next incomplete word
+            this.autoAdvanceToNextWord();
         } else if (this.settingsManager.getShowMistakes()) {
             this.highlightIncorrectWord(number, direction);
+        }
+    }
+
+    // Auto-advance to the next incomplete word
+    autoAdvanceToNextWord() {
+        const allClues = [...this.engine.clues.across, ...this.engine.clues.down];
+        
+        // Find all incomplete words
+        const incompleteWords = allClues.filter(clue => {
+            const direction = this.engine.clues.across.includes(clue) ? 'across' : 'down';
+            return !this.engine.checkAnswer(clue.number, direction);
+        });
+        
+        if (incompleteWords.length === 0) {
+            // All words are complete
+            return;
+        }
+        
+        // Find the next word in numerical order
+        let nextWord = null;
+        
+        // First try to find the next word after the current one
+        if (this.currentWord) {
+            const currentIndex = allClues.findIndex(clue => {
+                const clueDirection = this.engine.clues.across.includes(clue) ? 'across' : 'down';
+                return clue.number === this.currentWord.number && clueDirection === this.currentWord.direction;
+            });
+            
+            // Look for next incomplete word after current one
+            for (let i = currentIndex + 1; i < allClues.length; i++) {
+                const clue = allClues[i];
+                const clueDirection = this.engine.clues.across.includes(clue) ? 'across' : 'down';
+                if (!this.engine.checkAnswer(clue.number, clueDirection)) {
+                    nextWord = { number: clue.number, direction: clueDirection };
+                    break;
+                }
+            }
+        }
+        
+        // If no word found after current, start from beginning
+        if (!nextWord) {
+            const firstIncomplete = incompleteWords[0];
+            const direction = this.engine.clues.across.includes(firstIncomplete) ? 'across' : 'down';
+            nextWord = { number: firstIncomplete.number, direction };
+        }
+        
+        // Select the next word with a small delay for better UX
+        if (nextWord) {
+            setTimeout(() => {
+                this.selectWord(nextWord.number, nextWord.direction);
+            }, 300);
         }
     }
 
@@ -387,6 +453,10 @@ class CrosswordUI {
 
     updateProgress() {
         this.progressTracker.update();
+        // Update the new progress circle in header
+        if (window.app && window.app.updateProgressCircle) {
+            window.app.updateProgressCircle();
+        }
     }
 
     updateStats() {
@@ -474,6 +544,8 @@ class CrosswordUI {
             setTimeout(() => {
                 document.dispatchEvent(new CustomEvent('puzzleCompleted'));
             }, 500);
+            return true;
         }
+        return false;
     }
 }

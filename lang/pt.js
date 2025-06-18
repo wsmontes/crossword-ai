@@ -8,6 +8,7 @@ const pt = {
     newPuzzle: "Nova Palavra Cruzada",
     getHint: "Obter Dica",
     checkAnswers: "Verificar Respostas",
+    playAgain: "Jogar Novamente",
     
     // Grid and clues
     clickClueToStart: "Clique em uma pista para começar a resolver",
@@ -50,10 +51,12 @@ const pt = {
     
     // Messages
     generating: "Gerando palavra cruzada...",
+    aiGenerating: "A IA está criando seu quebra-cabeça...",
+    readyToPlay: "Pronto para jogar!",
     pleasewait: "Por favor, aguarde enquanto criamos sua palavra cruzada personalizada.",
     puzzleComplete: "Parabéns! Você completou a palavra cruzada!",
     connectionError: "Erro de conexão com o servidor de IA",
-    generationError: "Erro ao gerar a palavra cruzada",
+    generationError: "Erro ao gerar palavra cruzada",
     
     // Hints
     hintFor: "Dica para",

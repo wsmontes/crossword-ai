@@ -8,6 +8,7 @@ const en = {
     newPuzzle: "New Puzzle",
     getHint: "Get Hint",
     checkAnswers: "Check Answers",
+    playAgain: "Play Again",
     
     // Grid and clues
     clickClueToStart: "Click on a clue to start solving",
@@ -50,6 +51,8 @@ const en = {
     
     // Messages
     generating: "Generating crossword puzzle...",
+    aiGenerating: "AI is creating your puzzle...",
+    readyToPlay: "Ready to play!",
     pleasewait: "Please wait while we create your custom crossword puzzle.",
     puzzleComplete: "Congratulations! You completed the crossword puzzle!",
     connectionError: "Connection error with AI server",

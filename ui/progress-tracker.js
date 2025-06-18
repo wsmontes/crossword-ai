@@ -1,11 +1,16 @@
 class ProgressTracker {
     constructor(engine) {
         this.engine = engine;
+        
+        // Try to find progress elements (old layout)
         this.progressFill = document.getElementById('progress-fill');
         this.progressText = document.getElementById('progress-text');
         this.wordsCompleted = document.getElementById('words-completed');
         this.wordsTotal = document.getElementById('words-total');
         this.hintsUsed = document.getElementById('hints-used');
+        
+        // Track if we have the old progress elements
+        this.hasOldProgressBar = !!this.progressFill;
         
         this.startTime = null;
         this.completedWords = new Set();
@@ -45,7 +50,12 @@ class ProgressTracker {
 
     update() {
         const progress = this.calculateProgress();
-        this.updateProgressBar(progress.percentage);
+        
+        // Only update progress bar if elements exist
+        if (this.hasOldProgressBar) {
+            this.updateProgressBar(progress.percentage);
+        }
+        
         this.updateStats(progress);
         
         // Check for completion
@@ -55,6 +65,10 @@ class ProgressTracker {
     }
 
     calculateProgress() {
+        if (!this.engine.clues || !this.engine.clues.across || !this.engine.clues.down) {
+            return { completed: 0, total: 0, percentage: 0 };
+        }
+        
         const totalWords = this.engine.clues.across.length + this.engine.clues.down.length;
         const completedCount = this.getCompletedWordsCount();
         const percentage = totalWords > 0 ? Math.round((completedCount / totalWords) * 100) : 0;
@@ -67,6 +81,10 @@ class ProgressTracker {
     }
 
     getCompletedWordsCount() {
+        if (!this.engine.clues || !this.engine.clues.across || !this.engine.clues.down) {
+            return 0;
+        }
+        
         let count = 0;
         
         [...this.engine.clues.across, ...this.engine.clues.down].forEach(clue => {
@@ -80,6 +98,10 @@ class ProgressTracker {
     }
 
     updateProgressBar(percentage) {
+        if (!this.progressFill || !this.progressText) {
+            return;
+        }
+        
         this.progressFill.style.width = `${percentage}%`;
         this.progressText.textContent = `${percentage}%`;
         
@@ -98,9 +120,15 @@ class ProgressTracker {
     }
 
     updateStats(progress) {
-        this.wordsCompleted.textContent = progress.completed;
-        this.wordsTotal.textContent = progress.total;
-        this.hintsUsed.textContent = this.hintCount;
+        if (this.wordsCompleted) {
+            this.wordsCompleted.textContent = progress.completed;
+        }
+        if (this.wordsTotal) {
+            this.wordsTotal.textContent = progress.total;
+        }
+        if (this.hintsUsed) {
+            this.hintsUsed.textContent = this.hintCount;
+        }
     }
 
     markWordCompleted(number, direction) {
@@ -118,21 +146,27 @@ class ProgressTracker {
 
     incrementHints() {
         this.hintCount++;
-        this.hintsUsed.textContent = this.hintCount;
-        
-        // Animate hint counter
-        this.hintsUsed.classList.add('pulse');
-        setTimeout(() => this.hintsUsed.classList.remove('pulse'), 500);
+        if (this.hintsUsed) {
+            this.hintsUsed.textContent = this.hintCount;
+            
+            // Animate hint counter
+            this.hintsUsed.classList.add('pulse');
+            setTimeout(() => this.hintsUsed.classList.remove('pulse'), 500);
+        }
     }
 
     animateProgress() {
         // Animate progress bar
-        this.progressFill.classList.add('pulse');
-        setTimeout(() => this.progressFill.classList.remove('pulse'), 500);
+        if (this.progressFill) {
+            this.progressFill.classList.add('pulse');
+            setTimeout(() => this.progressFill.classList.remove('pulse'), 500);
+        }
         
         // Animate completed words counter
-        this.wordsCompleted.classList.add('bounce');
-        setTimeout(() => this.wordsCompleted.classList.remove('bounce'), 500);
+        if (this.wordsCompleted) {
+            this.wordsCompleted.classList.add('bounce');
+            setTimeout(() => this.wordsCompleted.classList.remove('bounce'), 500);
+        }
     }
 
     handlePuzzleCompletion() {
@@ -219,16 +253,20 @@ class ProgressTracker {
     }
 
     showCompletionCelebration() {
-        // Add celebration effects to progress bar
-        this.progressFill.classList.add('celebration');
+        // Add celebration effects to progress bar if it exists
+        if (this.progressFill) {
+            this.progressFill.classList.add('celebration');
+            
+            // Clean up after animation
+            setTimeout(() => {
+                if (this.progressFill) {
+                    this.progressFill.classList.remove('celebration');
+                }
+            }, 2000);
+        }
         
         // Create confetti effect (simple version)
         this.createConfettiEffect();
-        
-        // Clean up after animation
-        setTimeout(() => {
-            this.progressFill.classList.remove('celebration');
-        }, 2000);
     }
 
     createConfettiEffect() {

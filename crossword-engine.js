@@ -228,37 +228,23 @@ class CrosswordEngine {
 
     getDefaultPuzzle() {
         return {
+            theme: "Simple Words",
+            description: "A basic crossword puzzle with common words",
             grid: [
-                [null, null, null, "", "", "", null, "", ""],
-                [null, "", "", "", "", "", "", "", ""],
-                [null, "", null, "", null, "", null, "", null],
-                ["", "", "", "", "", "", "", "", ""],
-                ["", "", null, "", null, "", null, "", ""],
-                ["", "", "", "", "", "", "", "", ""],
-                [null, "", null, "", null, "", null, "", null],
-                ["", "", "", "", "", "", "", "", null],
-                ["", "", null, null, null, null, null, null, null]
+                ["C", "A", "T", null, null],
+                ["A", null, "H", null, null],
+                ["R", null, "E", null, null],
+                [null, null, null, null, null],
+                ["D", "O", "G", null, null]
             ],
             clues: {
                 across: [
-                    { number: 1, clue: "Man's best friend", answer: "DOG", startRow: 0, startCol: 3 },
-                    { number: 4, clue: "Feline pet", answer: "CAT", startRow: 0, startCol: 7 },
-                    { number: 5, clue: "Large African mammal with trunk", answer: "ELEPHANT", startRow: 1, startCol: 1 },
-                    { number: 7, clue: "King of the jungle", answer: "LION", startRow: 3, startCol: 0 },
-                    { number: 9, clue: "Striped African horse", answer: "ZEBRA", startRow: 4, startCol: 0 },
-                    { number: 11, clue: "Australian hopping animal", answer: "KANGAROO", startRow: 5, startCol: 0 },
-                    { number: 13, clue: "Flying mammal", answer: "BAT", startRow: 6, startCol: 1 },
-                    { number: 14, clue: "Garden amphibian", answer: "FROG", startRow: 7, startCol: 0 }
+                    { number: 1, clue: "Feline pet", answer: "CAT", startRow: 0, startCol: 0 },
+                    { number: 4, clue: "Man's best friend", answer: "DOG", startRow: 4, startCol: 0 }
                 ],
                 down: [
-                    { number: 1, clue: "Ocean predator", answer: "SHARK", startRow: 0, startCol: 3 },
-                    { number: 2, clue: "Wise nocturnal bird", answer: "OWL", startRow: 0, startCol: 4 },
-                    { number: 3, clue: "Slow garden creature", answer: "SNAIL", startRow: 0, startCol: 5 },
-                    { number: 4, clue: "Dairy product", answer: "CHEESE", startRow: 0, startCol: 7 },
-                    { number: 6, clue: "Flying insect", answer: "BEE", startRow: 1, startCol: 8 },
-                    { number: 8, clue: "Tall African mammal", answer: "GIRAFFE", startRow: 3, startCol: 6 },
-                    { number: 10, clue: "Intelligent marine mammal", answer: "DOLPHIN", startRow: 4, startCol: 4 },
-                    { number: 12, clue: "Reptile with shell", answer: "TURTLE", startRow: 5, startCol: 5 }
+                    { number: 1, clue: "Vehicle with four wheels", answer: "CAR", startRow: 0, startCol: 0 },
+                    { number: 2, clue: "Opposite of cold", answer: "HOT", startRow: 0, startCol: 2 }
                 ]
             }
         };

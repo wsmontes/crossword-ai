@@ -79,11 +79,11 @@ class ClueManager {
         if (clueElement) {
             clueElement.classList.add('active');
             
-            // Scroll into view if needed
-            clueElement.scrollIntoView({
-                behavior: 'smooth',
-                block: 'nearest'
-            });
+            // Remove scroll behavior - keep focus on the puzzle
+            // clueElement.scrollIntoView({
+            //     behavior: 'smooth',
+            //     block: 'nearest'
+            // });
         }
 
         // Dispatch event for UI coordination
