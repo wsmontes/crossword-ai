@@ -119,14 +119,25 @@ class SettingsManager {
 
         const openaiKey = document.getElementById('openai-key');
         if (openaiKey) {
-            // Save on change, input, and blur events to ensure persistence
-            const saveApiKey = (e) => {
+            let lastSavedKey = this.storage.getApiKey('openai') || '';
+            
+            // Single save function with deduplication
+            const saveApiKey = (e, eventType = 'unknown') => {
                 const value = e.target.value.trim();
+                
+                // Skip saving if the value hasn't actually changed
+                if (value === lastSavedKey) {
+                    return;
+                }
+                
                 const statusElement = document.getElementById('openai-key-status');
                 
-                console.log('Saving OpenAI API key...');
-                console.log('Key value:', value ? `${value.substring(0, 8)}...` : 'empty');
-                console.log('Key length:', value ? value.length : 0);
+                // Only log in debug mode to reduce console noise
+                if (window.DEBUG_STORAGE) {
+                    console.log(`Saving OpenAI API key (${eventType})...`);
+                    console.log('Key value:', value ? `${value.substring(0, 8)}...` : 'empty');
+                    console.log('Key length:', value ? value.length : 0);
+                }
                 
                 if (statusElement) {
                     statusElement.textContent = window.i18n ? window.i18n.t('saving') : 'Saving...';
@@ -135,15 +146,14 @@ class SettingsManager {
                 
                 if (value) {
                     this.storage.setApiKey('openai', value);
-                    console.log('API key saved to storage');
-                    
-                    // Verify it was saved
-                    const retrieved = this.storage.getApiKey('openai');
-                    console.log('Verification - retrieved key:', retrieved ? `${retrieved.substring(0, 8)}...` : 'null');
+                    if (window.DEBUG_STORAGE) console.log('API key saved to storage');
                 } else {
                     this.storage.clearApiKey('openai');
-                    console.log('API key cleared from storage');
+                    if (window.DEBUG_STORAGE) console.log('API key cleared from storage');
                 }
+                
+                // Update the last saved key to prevent duplicate saves
+                lastSavedKey = value;
                 
                 // Show success message briefly
                 setTimeout(() => {
@@ -159,15 +169,17 @@ class SettingsManager {
                 }, 300);
                 
                 this.updateConnectionInfo();
+                // Only dispatch change event if value actually changed
                 this.dispatchSettingChange('openaiApiKey', value);
             };
             
-            openaiKey.addEventListener('change', saveApiKey);
-            openaiKey.addEventListener('blur', saveApiKey);
+            // Use only blur event to save (when user finishes editing)
+            openaiKey.addEventListener('blur', (e) => saveApiKey(e, 'blur'));
+            
+            // Optional: Add input debouncing for real-time saving (longer delay)
             openaiKey.addEventListener('input', (e) => {
-                // Debounced save on input to avoid excessive saves
                 clearTimeout(this.apiKeyInputTimeout);
-                this.apiKeyInputTimeout = setTimeout(() => saveApiKey(e), 1000);
+                this.apiKeyInputTimeout = setTimeout(() => saveApiKey(e, 'input-debounced'), 2000);
             });
         }
 
@@ -316,9 +328,11 @@ class SettingsManager {
         if (openaiKey) {
             try {
                 const storedApiKey = this.storage.getApiKey('openai');
-                console.log('Loading OpenAI API key from storage...');
-                console.log('Loaded key:', storedApiKey ? `${storedApiKey.substring(0, 8)}...` : 'null');
-                console.log('Loaded key length:', storedApiKey ? storedApiKey.length : 0);
+                if (window.DEBUG_STORAGE) {
+                    console.log('Loading OpenAI API key from storage...');
+                    console.log('Loaded key:', storedApiKey ? `${storedApiKey.substring(0, 8)}...` : 'null');
+                    console.log('Loaded key length:', storedApiKey ? storedApiKey.length : 0);
+                }
                 
                 // Always set the value, even if it's empty
                 openaiKey.value = storedApiKey || '';

@@ -8,6 +8,7 @@ class CrosswordApp {
         this.hintsUsed = 0;
         this.currentTheme = null;
         this.settingsManager = null;
+        this.connectionTestTimeout = null; // For debouncing connection tests
         this.init();
     }
 
@@ -975,12 +976,24 @@ class CrosswordApp {
         } else if (key === 'lmstudioEndpoint') {
             this.llmClient.setEndpoint(value);
         } else if (key === 'openaiApiKey') {
+            // Check if the API key actually changed to prevent unnecessary operations
+            const currentKey = this.llmClient.getOpenAIApiKey ? this.llmClient.getOpenAIApiKey() : '';
+            if (value === currentKey) {
+                return; // No change, skip processing
+            }
+            
             this.llmClient.setOpenAIApiKey(value);
             
             // If a new OpenAI API key is set, automatically test connection
             if (value && value.trim()) {
                 console.log('New OpenAI API key detected, testing connection...');
-                setTimeout(async () => {
+                
+                // Clear any existing timeout to prevent multiple connection tests
+                if (this.connectionTestTimeout) {
+                    clearTimeout(this.connectionTestTimeout);
+                }
+                
+                this.connectionTestTimeout = setTimeout(async () => {
                     try {
                         // Ensure we're using OpenAI provider
                         this.llmClient.setProvider('openai');
@@ -1007,7 +1020,7 @@ class CrosswordApp {
                             'Error testing connection. Please check your API key.';
                         this.showNotification(errorMessage, 'error');
                     }
-                }, 1000); // Wait 1 second to ensure key is fully saved
+                }, 1500); // Wait 1.5 seconds to ensure key is fully saved
             }
         }
     }
@@ -1115,9 +1128,13 @@ class CrosswordApp {
             providerSelect.value = provider;
         }
         
-        // Update settings manager if available
+        // Update settings manager if available (without triggering cascading saves)
         if (this.ui && this.ui.settingsManager) {
-            this.ui.settingsManager.setSetting('aiProvider', provider);
+            // Only update if different to prevent cascading events
+            const currentProvider = this.ui.settingsManager.getSetting('aiProvider');
+            if (currentProvider !== provider) {
+                this.ui.settingsManager.setSetting('aiProvider', provider);
+            }
         }
         
         // Show/hide relevant settings

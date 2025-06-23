@@ -508,7 +508,8 @@ class CrosswordUI {
     }
 
     highlightResults(results) {
-        results.words.forEach(wordResult => {
+        // results is an array of result objects, not an object with a 'words' property
+        results.forEach(wordResult => {
             const cells = this.engine.getWordCells(wordResult.number, wordResult.direction);
             cells.forEach(({ row, col }) => {
                 const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
