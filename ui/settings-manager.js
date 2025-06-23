@@ -119,12 +119,10 @@ class SettingsManager {
 
         const openaiKey = document.getElementById('openai-key');
         if (openaiKey) {
-            let lastSavedKey = this.storage.getApiKey('openai') || '';
+            let lastSavedKey = this.storage.getApiKey('openai');
             
-            // Single save function with deduplication
-            const saveApiKey = (e, eventType = 'unknown') => {
-                const value = e.target.value.trim();
-                
+            // Simplified save function
+            const saveApiKey = (value) => {
                 // Skip saving if the value hasn't actually changed
                 if (value === lastSavedKey) {
                     return;
@@ -132,27 +130,12 @@ class SettingsManager {
                 
                 const statusElement = document.getElementById('openai-key-status');
                 
-                // Only log in debug mode to reduce console noise
-                if (window.DEBUG_STORAGE) {
-                    console.log(`Saving OpenAI API key (${eventType})...`);
-                    console.log('Key value:', value ? `${value.substring(0, 8)}...` : 'empty');
-                    console.log('Key length:', value ? value.length : 0);
-                }
-                
                 if (statusElement) {
                     statusElement.textContent = window.i18n ? window.i18n.t('saving') : 'Saving...';
                     statusElement.className = 'input-status visible saving';
                 }
                 
-                if (value) {
-                    this.storage.setApiKey('openai', value);
-                    if (window.DEBUG_STORAGE) console.log('API key saved to storage');
-                } else {
-                    this.storage.clearApiKey('openai');
-                    if (window.DEBUG_STORAGE) console.log('API key cleared from storage');
-                }
-                
-                // Update the last saved key to prevent duplicate saves
+                this.storage.setApiKey('openai', value);
                 lastSavedKey = value;
                 
                 // Show success message briefly
@@ -169,17 +152,20 @@ class SettingsManager {
                 }, 300);
                 
                 this.updateConnectionInfo();
-                // Only dispatch change event if value actually changed
                 this.dispatchSettingChange('openaiApiKey', value);
             };
             
-            // Use only blur event to save (when user finishes editing)
-            openaiKey.addEventListener('blur', (e) => saveApiKey(e, 'blur'));
+            // Save on blur (when user finishes editing)
+            openaiKey.addEventListener('blur', (e) => {
+                saveApiKey(e.target.value.trim());
+            });
             
-            // Optional: Add input debouncing for real-time saving (longer delay)
+            // Optional: Add debounced input for real-time saving
             openaiKey.addEventListener('input', (e) => {
                 clearTimeout(this.apiKeyInputTimeout);
-                this.apiKeyInputTimeout = setTimeout(() => saveApiKey(e, 'input-debounced'), 2000);
+                this.apiKeyInputTimeout = setTimeout(() => {
+                    saveApiKey(e.target.value.trim());
+                }, 1500);
             });
         }
 

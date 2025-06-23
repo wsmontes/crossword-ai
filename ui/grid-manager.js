@@ -14,14 +14,22 @@ class GridManager {
         const rows = grid.length;
         const cols = grid[0] ? grid[0].length : 0;
 
-        // Set CSS grid dimensions - adaptive to puzzle size
-        const cellSize = `clamp(24px, ${Math.min(3.5, 50/Math.max(rows, cols))}vmin, 40px)`;
+        // Dynamic cell sizing based on grid dimensions and viewport
+        const { cellSize, gridMaxSize } = this.calculateOptimalGridSize(rows, cols);
+        
+        // Set CSS grid dimensions with responsive sizing
         this.gridElement.style.gridTemplateColumns = `repeat(${cols}, ${cellSize})`;
         this.gridElement.style.gridTemplateRows = `repeat(${rows}, ${cellSize})`;
+        this.gridElement.style.maxWidth = gridMaxSize;
+        this.gridElement.style.maxHeight = gridMaxSize;
         
         // Center the grid and ensure it fits in the container
         this.gridElement.style.justifySelf = 'center';
         this.gridElement.style.alignSelf = 'center';
+        this.gridElement.style.aspectRatio = `${cols} / ${rows}`;
+
+        // Add responsive class for styling
+        this.gridElement.className = `crossword-grid size-${this.getGridSizeClass(rows, cols)}`;
 
         // Clear existing grid
         this.gridElement.innerHTML = '';
@@ -33,6 +41,81 @@ class GridManager {
                 this.gridElement.appendChild(cell);
             }
         }
+
+        // Add resize observer for dynamic adjustment
+        this.setupResizeObserver();
+    }
+
+    calculateOptimalGridSize(rows, cols) {
+        const container = this.gridElement.parentElement;
+        const containerRect = container.getBoundingClientRect();
+        
+        // Get better container dimensions considering the overall layout
+        const gameBoard = document.querySelector('.game-board');
+        const gameBoardRect = gameBoard ? gameBoard.getBoundingClientRect() : containerRect;
+        
+        // Calculate available space more accurately
+        const availableWidth = Math.min(containerRect.width, gameBoardRect.width * 0.6) - 60; // Leave more padding and account for sidebar
+        const availableHeight = Math.min(containerRect.height, gameBoardRect.height) - 120; // Account for word input panel
+        
+        // Calculate cell size based on available space and grid dimensions
+        const maxCellWidth = Math.floor(availableWidth / cols);
+        const maxCellHeight = Math.floor(availableHeight / rows);
+        const maxCellSize = Math.min(maxCellWidth, maxCellHeight);
+        
+        // Set reasonable min/max bounds with better mobile support
+        const minCellSize = window.innerWidth < 768 ? 24 : 28;
+        const maxAllowedCellSize = window.innerWidth < 768 ? 36 : 45;
+        
+        const cellSize = Math.max(minCellSize, Math.min(maxCellSize, maxAllowedCellSize));
+        
+        // Calculate total grid size
+        const totalGridWidth = cellSize * cols;
+        const totalGridHeight = cellSize * rows;
+        const gridMaxSize = `min(${totalGridWidth}px, ${availableWidth}px)`;
+        
+        return {
+            cellSize: `${cellSize}px`,
+            gridMaxSize
+        };
+    }
+
+    getGridSizeClass(rows, cols) {
+        const totalCells = rows * cols;
+        if (totalCells <= 100) return 'small';
+        if (totalCells <= 225) return 'medium';
+        return 'large';
+    }
+
+    setupResizeObserver() {
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
+
+        this.resizeObserver = new ResizeObserver(() => {
+            // Debounce resize events
+            clearTimeout(this.resizeTimeout);
+            this.resizeTimeout = setTimeout(() => {
+                this.updateGridSize();
+            }, 250);
+        });
+
+        this.resizeObserver.observe(this.gridElement.parentElement);
+    }
+
+    updateGridSize() {
+        if (!this.engine.grid || this.engine.grid.length === 0) return;
+
+        const grid = this.engine.grid;
+        const rows = grid.length;
+        const cols = grid[0] ? grid[0].length : 0;
+
+        const { cellSize, gridMaxSize } = this.calculateOptimalGridSize(rows, cols);
+        
+        this.gridElement.style.gridTemplateColumns = `repeat(${cols}, ${cellSize})`;
+        this.gridElement.style.gridTemplateRows = `repeat(${rows}, ${cellSize})`;
+        this.gridElement.style.maxWidth = gridMaxSize;
+        this.gridElement.style.maxHeight = gridMaxSize;
     }
 
     createCell(row, col) {
@@ -251,9 +334,23 @@ class GridManager {
     }
 
     getCurrentDirection() {
-        // Get current direction from UI state
-        const directionElement = document.getElementById('current-word-direction');
-        return directionElement ? directionElement.textContent.toLowerCase() : null;
+        // Get current direction from the UI state or from current word display
+        const currentDirectionElement = document.getElementById('current-direction');
+        if (currentDirectionElement) {
+            const text = currentDirectionElement.textContent.toLowerCase();
+            if (text.includes('across') || text.includes('horizontal')) {
+                return 'across';
+            } else if (text.includes('down') || text.includes('vertical')) {
+                return 'down';
+            }
+        }
+        
+        // Fallback: check if there's a selected word in the UI
+        if (window.app && window.app.ui && window.app.ui.currentWord) {
+            return window.app.ui.currentWord.direction;
+        }
+        
+        return 'across'; // Default to across
     }
 
     highlightWord(number, direction) {
@@ -271,13 +368,57 @@ class GridManager {
     }
 
     selectCell(row, col) {
-        // Clear previous selection
-        this.clearSelection();
+        // Don't allow selection of blocked cells
+        if (this.engine.isCellBlocked(row, col)) {
+            return;
+        }
+
+        // Find words that intersect at this cell
+        const acrossWord = this.engine.findWordAt(row, col, 'across');
+        const downWord = this.engine.findWordAt(row, col, 'down');
         
-        // Select the specified cell
-        const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-        if (cell) {
-            cell.classList.add('selected');
+        let targetWord = null;
+        let targetDirection = null;
+        
+        // Determine which word to select
+        if (acrossWord && downWord) {
+            // Both words exist - check if we're clicking on the same cell as currently selected
+            const isCurrentCell = this.selectedCell && 
+                                  this.selectedCell.row === row && 
+                                  this.selectedCell.col === col;
+            
+            if (isCurrentCell) {
+                // Toggle direction if clicking the same cell
+                const currentDirection = this.getCurrentDirection();
+                targetDirection = currentDirection === 'across' ? 'down' : 'across';
+                targetWord = targetDirection === 'across' ? acrossWord : downWord;
+            } else {
+                // New cell - prefer across by default
+                targetDirection = 'across';
+                targetWord = acrossWord;
+            }
+        } else if (acrossWord) {
+            targetDirection = 'across';
+            targetWord = acrossWord;
+        } else if (downWord) {
+            targetDirection = 'down';
+            targetWord = downWord;
+        }
+        
+        if (targetWord && targetDirection) {
+            // Store selected cell
+            this.selectedCell = { row, col };
+            
+            // Trigger word selection event
+            const event = new CustomEvent('wordSelect', {
+                detail: {
+                    number: targetWord.number,
+                    direction: targetDirection,
+                    row,
+                    col
+                }
+            });
+            document.dispatchEvent(event);
         }
     }
 

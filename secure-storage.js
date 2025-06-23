@@ -10,31 +10,50 @@ class SecureStorage {
         let key = localStorage.getItem(keyName);
         
         if (!key) {
-            // Generate a simple key for basic obfuscation
-            key = this.generateKey();
+            // Generate a browser-specific key for better security
+            key = this.generateBrowserKey();
             localStorage.setItem(keyName, key);
         }
         
         return key;
     }
 
-    generateKey() {
-        return Math.random().toString(36).substring(2, 15) + 
-               Math.random().toString(36).substring(2, 15);
+    generateBrowserKey() {
+        // Create a more robust key based on browser fingerprint
+        const fingerprint = [
+            navigator.userAgent.substring(0, 50),
+            navigator.language,
+            screen.width + 'x' + screen.height,
+            new Date().getTimezoneOffset().toString()
+        ].join('|');
+        
+        let hash = 0;
+        for (let i = 0; i < fingerprint.length; i++) {
+            const char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        
+        return Math.abs(hash).toString(36);
     }
 
-    // Simple XOR encryption for basic obfuscation
+    // Improved XOR encryption with better error handling
     encrypt(text) {
         if (!text) return '';
         
-        let result = '';
-        for (let i = 0; i < text.length; i++) {
-            const textChar = text.charCodeAt(i);
-            const keyChar = this.encryptionKey.charCodeAt(i % this.encryptionKey.length);
-            result += String.fromCharCode(textChar ^ keyChar);
+        try {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                const textChar = text.charCodeAt(i);
+                const keyChar = this.encryptionKey.charCodeAt(i % this.encryptionKey.length);
+                result += String.fromCharCode(textChar ^ keyChar);
+            }
+            
+            return btoa(result); // Base64 encode
+        } catch (error) {
+            console.error('Encryption error:', error);
+            return '';
         }
-        
-        return btoa(result); // Base64 encode
     }
 
     decrypt(encryptedText) {
@@ -88,49 +107,25 @@ class SecureStorage {
         return localStorage.getItem(fullKey) !== null;
     }
 
-    // Specific methods for common data
+    // Simplified API key management
     setApiKey(provider, apiKey) {
-        // Only log if debug mode is enabled
-        if (window.DEBUG_STORAGE) {
-            console.log(`SecureStorage: Setting API key for ${provider}`);
-            console.log(`SecureStorage: Key value:`, apiKey ? `${apiKey.substring(0, 8)}...` : 'null');
-            console.log(`SecureStorage: Key length:`, apiKey ? apiKey.length : 0);
+        if (!apiKey || typeof apiKey !== 'string') {
+            this.remove(`api_key_${provider}`);
+            return;
         }
         
-        this.set(`api_key_${provider}`, apiKey);
-        
-        // Verify it was stored (only in debug mode)
-        if (window.DEBUG_STORAGE) {
-            const stored = this.get(`api_key_${provider}`);
-            console.log(`SecureStorage: Verification - stored key:`, stored ? `${stored.substring(0, 8)}...` : 'null');
-        }
+        this.set(`api_key_${provider}`, apiKey.trim());
     }
 
     getApiKey(provider) {
-        const key = this.get(`api_key_${provider}`);
-        
-        // Only log if debug mode is enabled
-        if (window.DEBUG_STORAGE) {
-            console.log(`SecureStorage: Getting API key for ${provider}`);
-            console.log(`SecureStorage: Retrieved key:`, key ? `${key.substring(0, 8)}...` : 'null');
-            console.log(`SecureStorage: Retrieved key length:`, key ? key.length : 0);
-        }
-        
-        return key;
+        return this.get(`api_key_${provider}`) || '';
     }
 
     clearApiKey(provider) {
         this.remove(`api_key_${provider}`);
     }
 
-    setEndpoint(provider, endpoint) {
-        this.set(`endpoint_${provider}`, endpoint);
-    }
-
-    getEndpoint(provider) {
-        return this.get(`endpoint_${provider}`);
-    }
-
+    // Settings management
     setSettings(settings) {
         this.set('settings', JSON.stringify(settings));
     }
@@ -148,7 +143,16 @@ class SecureStorage {
         return {};
     }
 
-    // Statistics and progress tracking
+    // Endpoint management
+    setEndpoint(provider, endpoint) {
+        this.set(`endpoint_${provider}`, endpoint);
+    }
+
+    getEndpoint(provider) {
+        return this.get(`endpoint_${provider}`) || '';
+    }
+
+    // Statistics tracking
     setStats(stats) {
         this.set('stats', JSON.stringify(stats));
     }
@@ -188,7 +192,7 @@ class SecureStorage {
         this.setStats(updatedStats);
     }
 
-    // Save and load puzzle progress
+    // Puzzle progress management
     savePuzzleProgress(puzzleId, progress) {
         this.set(`puzzle_${puzzleId}`, JSON.stringify(progress));
     }
@@ -210,62 +214,38 @@ class SecureStorage {
         this.remove(`puzzle_${puzzleId}`);
     }
 
-    // Get all saved puzzle IDs
-    getSavedPuzzles() {
+    // Utility methods
+    getStorageUsage() {
+        let totalSize = 0;
         const keys = Object.keys(localStorage);
-        const puzzleKeys = keys.filter(key => 
-            key.startsWith(this.prefix + 'puzzle_') && 
-            !key.includes('_stats')
-        );
-        
-        return puzzleKeys.map(key => 
-            key.replace(this.prefix + 'puzzle_', '')
-        );
-    }
-
-    // Clean up old data
-    cleanupOldData(daysOld = 30) {
-        const cutoffDate = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
-        const keys = Object.keys(localStorage);
-        
         keys.forEach(key => {
-            if (key.startsWith(this.prefix + 'puzzle_')) {
-                try {
-                    const data = JSON.parse(this.decrypt(localStorage.getItem(key)));
-                    if (data.timestamp && data.timestamp < cutoffDate) {
-                        localStorage.removeItem(key);
-                    }
-                } catch (error) {
-                    // If we can't parse it, it might be corrupt, so remove it
-                    localStorage.removeItem(key);
-                }
+            if (key.startsWith(this.prefix)) {
+                totalSize += localStorage.getItem(key).length;
             }
         });
+        return totalSize;
     }
 
-    // Export/Import functionality for backup
+    // Data export/import
     exportData() {
         const data = {};
         const keys = Object.keys(localStorage);
-        
         keys.forEach(key => {
-            if (key.startsWith(this.prefix) && !key.includes('enc_key')) {
-                const rawKey = key.replace(this.prefix, '');
-                data[rawKey] = this.decrypt(localStorage.getItem(key));
+            if (key.startsWith(this.prefix)) {
+                data[key] = localStorage.getItem(key);
             }
         });
-        
-        return JSON.stringify(data, null, 2);
+        return JSON.stringify(data);
     }
 
     importData(jsonData) {
         try {
             const data = JSON.parse(jsonData);
-            
-            Object.entries(data).forEach(([key, value]) => {
-                this.set(key, value);
+            Object.keys(data).forEach(key => {
+                if (key.startsWith(this.prefix)) {
+                    localStorage.setItem(key, data[key]);
+                }
             });
-            
             return true;
         } catch (error) {
             console.error('Failed to import data:', error);
@@ -273,21 +253,23 @@ class SecureStorage {
         }
     }
 
-    // Memory usage estimation
-    getStorageUsage() {
-        let totalSize = 0;
+    // Cleanup old data
+    cleanupOldData(daysOld = 30) {
+        const cutoffTime = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
         const keys = Object.keys(localStorage);
         
         keys.forEach(key => {
-            if (key.startsWith(this.prefix)) {
-                totalSize += key.length + (localStorage.getItem(key) || '').length;
+            if (key.startsWith(this.prefix + 'puzzle_')) {
+                try {
+                    const data = JSON.parse(this.decrypt(localStorage.getItem(key)));
+                    if (data.timestamp && data.timestamp < cutoffTime) {
+                        localStorage.removeItem(key);
+                    }
+                } catch (error) {
+                    // Remove corrupted data
+                    localStorage.removeItem(key);
+                }
             }
         });
-        
-        return {
-            bytes: totalSize,
-            kb: Math.round(totalSize / 1024 * 100) / 100,
-            mb: Math.round(totalSize / (1024 * 1024) * 100) / 100
-        };
     }
 }

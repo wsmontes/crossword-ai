@@ -543,8 +543,12 @@ class CrosswordUI {
     }
 
     showMessage(message, type = 'info', duration = 3000) {
+        // Use the main app's notification system
         if (window.app && window.app.showNotification) {
             window.app.showNotification(message, type, duration);
+        } else {
+            // Fallback for cases where main app isn't available
+            console.log(`[${type.toUpperCase()}] ${message}`);
         }
     }
 

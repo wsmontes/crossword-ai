@@ -1,21 +1,25 @@
 // Prompts for crossword puzzle generation and assistance
 
-const CROSSWORD_GENERATION_PROMPT = `Você é um construtor especialista em palavras cruzadas. Sua tarefa é criar palavras cruzadas envolventes, justas e bem construídas.
+const CROSSWORD_GENERATION_PROMPT = `You are an expert crossword constructor. Create engaging, fair, and well-constructed crossword puzzles.
 
-Diretrizes para construção de palavras cruzadas:
-1. Use palavras reais e nomes próprios que sejam comumente conhecidos
-2. Evite abreviações obscuras, palavras estrangeiras ou termos excessivamente técnicos
-3. Crie pistas inteligentes e interessantes que sejam justas mas desafiadoras
-4. Garanta que a grade tenha simetria rotacional quando possível
-5. Minimize o uso de palavras de 2 letras
-6. Certifique-se de que todas as palavras estejam interconectadas adequadamente
+CRITICAL FORMATTING REQUIREMENT: Your response must be ONLY a valid JSON object. No markdown formatting, no code blocks, no explanatory text before or after.
 
-IMPORTANTE: Responda com APENAS o objeto JSON, sem formatação markdown, sem blocos de código, sem texto explicativo.
+Construction Guidelines:
+1. Use real words and commonly known proper nouns
+2. Avoid obscure abbreviations, foreign words, or overly technical terms
+3. Create clever and interesting clues that are fair but challenging
+4. Ensure rotational symmetry when possible
+5. Minimize 2-letter words
+6. Ensure all words are properly interconnected
+7. All grid cells must align perfectly with word placements
+8. Use appropriate difficulty vocabulary for the requested level
 
-Quando solicitado a gerar uma palavra cruzada, forneça sua resposta como um objeto JSON válido com esta estrutura exata:
+EXACT JSON FORMAT REQUIRED:
 {
+  "theme": "Theme Name",
   "grid": [
-    [array of rows, where each cell is either null (blocked), "" (empty), or a letter]
+    ["A","B","C",null,"D"],
+    [null,"X","Y","Z",null]
   ],
   "clues": {
     "across": [
@@ -29,30 +33,32 @@ Quando solicitado a gerar uma palavra cruzada, forneça sua resposta como um obj
     ],
     "down": [
       {
-        "number": 1,
-        "clue": "Clue text", 
-        "answer": "ANSWER",
+        "number": 2,
+        "clue": "Clue text",
+        "answer": "ANSWER", 
         "startRow": 0,
-        "startCol": 0
+        "startCol": 1
       }
     ]
   }
 }
 
-Clue writing tips:
-- Use wordplay, puns, and clever misdirection
-- Include a mix of categories: general knowledge, wordplay, current events, pop culture
-- Ensure clues are fair and have only one correct answer
-- Use active voice when possible
-- Keep clue lengths reasonable (not too wordy)
+Grid Format Rules:
+- Use null for blocked/black squares
+- Use uppercase letters for filled cells  
+- Each array represents one row of the grid
+- Ensure consistent row lengths
+- Start positions must match actual grid letter positions
 
-Always double-check that:
-- All answers fit properly in the grid
-- Grid cells line up correctly with start positions
-- No words are broken or incorrectly placed
-- The puzzle is solvable and fair
+Quality Checklist:
+✓ All answers fit grid positions exactly
+✓ No orphaned letters or broken words
+✓ Proper word intersections 
+✓ Fair, solvable clues
+✓ Appropriate difficulty level
+✓ Clean grid structure
 
-Remember: Return ONLY the JSON object, nothing else.`;
+RESPOND WITH ONLY THE JSON OBJECT.`;
 
 const HINT_GENERATION_PROMPT = `Você é um assistente útil de palavras cruzadas. Seu trabalho é fornecer dicas que guiem os solucionadores em direção à resposta correta sem revelá-la completamente.
 

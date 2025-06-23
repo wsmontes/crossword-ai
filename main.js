@@ -1,6 +1,7 @@
 // Main application initialization
 class CrosswordApp {
     constructor() {
+        this.initialized = false; // Add initialization guard
         this.engine = null;
         this.llmClient = null;
         this.ui = null;
@@ -8,17 +9,27 @@ class CrosswordApp {
         this.hintsUsed = 0;
         this.currentTheme = null;
         this.settingsManager = null;
+        this.currentPuzzle = null;
         this.connectionTestTimeout = null; // For debouncing connection tests
-        this.init();
+        
+        // Initialize app when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
     }
 
     init() {
-        // Wait for DOM to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.initializeApp());
-        } else {
-            this.initializeApp();
+        // Prevent double initialization
+        if (this.initialized) {
+            console.warn('App already initialized, skipping...');
+            return;
         }
+        this.initialized = true;
+        
+        console.log('Initializing Crossword Puzzle AI...');
+        this.initializeApp();
     }
 
     async initializeApp() {
@@ -362,11 +373,11 @@ class CrosswordApp {
                 theme: "Learning Demo",
                 grid: [
                     [null, null, null, null, null, null, null, null, null, null],
-                    [null, null, 'P', 'E', 'N', 'T', 'A', 'G', 'O', 'N'],
-                    [null, null, 'E', null, null, null, null, null, null, null],
-                    [null, null, 'N', null, null, null, null, null, null, null],
+                    [null, null, "P", "E", "N", "T", "A", "G", "O", "N"],
+                    [null, null, "E", null, null, null, null, null, null, null],
+                    [null, null, "N", null, null, null, null, null, null, null],
                     [null, null, null, null, null, null, null, null, null, null],
-                    [null, 'H', 'O', 'R', 'I', 'Z', 'O', 'N', 'T', 'A'],
+                    [null, "H", "O", "R", "I", "Z", "O", "N", "T", "A"],
                     [null, null, null, null, null, null, null, null, null, null],
                     [null, null, null, null, null, null, null, null, null, null],
                     [null, null, null, null, null, null, null, null, null, null],
@@ -484,100 +495,123 @@ class CrosswordApp {
         return sizeMap[gridSize] || 15; // Default to medium if unknown
     }
 
-    async generateAIPuzzle(difficulty, gridSize) {
-        try {
-            console.log(`Generating ${difficulty} difficulty puzzle with ${gridSize} grid...`);
-            
-            // Create language-aware prompt
-            const isPortuguese = window.i18n && window.i18n.getCurrentLanguage() === 'pt';
-            
-            let prompt;
-            if (isPortuguese) {
-                prompt = `Gere uma palavra cruzada em português com dificuldade ${difficulty} e grade ${gridSize}. 
-                A palavra cruzada deve ser envolvente e educativa. Inclua um tema e forneça tanto o layout da grade quanto as pistas.
-                IMPORTANTE: Todas as respostas devem ser em português e as pistas devem ser em português.
-                Use apenas palavras comuns em português que sejam amplamente conhecidas.`;
-            } else {
-                prompt = `Generate a ${difficulty} difficulty crossword puzzle with a ${gridSize} grid size. 
-                The puzzle should be engaging and educational. Include a theme and provide both the grid layout and clues.
-                IMPORTANT: All answers should be in English and clues should be in English.`;
-            }
-            
-            this.showThinking(true);
-            
-            const response = await this.llmClient.generatePuzzle(prompt);
-            
-            this.showThinking(false);
-            
-            if (!response) {
-                throw new Error('No response received from AI service');
-            }
-            
-            // Parse the AI response
-            const puzzleData = await this.parseAIResponse(response);
-            
-            const validation = this.validatePuzzleData(puzzleData);
-            if (!puzzleData || !validation.valid) {
-                const errorMsg = validation.errors ? validation.errors.join(', ') : 'Unknown validation error';
-                throw new Error(`Invalid puzzle data: ${errorMsg}`);
-            }
-            
-            return puzzleData;
-            
-        } catch (error) {
-            this.showThinking(false);
-            console.error('Error generating AI puzzle:', error);
-            
-            // If connection error, try intelligent reconnection
-            if (error.message.includes('Not connected to AI service') || 
-                error.message.includes('Connection refused') || 
-                error.message.includes('ERR_CONNECTION_REFUSED') ||
-                error.message.includes('fetch')) {
+    async generateAIPuzzle(difficulty, gridSize, maxRetries = 3) {
+        const isPortuguese = window.i18n && window.i18n.getCurrentLanguage() === 'pt';
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`Generating ${difficulty} difficulty puzzle with ${gridSize} grid (attempt ${attempt}/${maxRetries})...`);
                 
-                console.log('Connection error detected, attempting intelligent reconnection...');
+                // Build comprehensive prompt
+                const prompt = this.buildComprehensivePrompt(difficulty, gridSize, isPortuguese);
                 
-                // Try intelligent reconnection
-                const reconnected = await this.autoConnectToAI();
+                this.showThinking(true);
+                this.updateLoadingStep('generate', `Generating puzzle (attempt ${attempt})...`);
                 
-                if (reconnected) {
-                    console.log('Reconnected successfully, retrying puzzle generation...');
+                const response = await this.llmClient.generatePuzzle(prompt);
+                
+                this.showThinking(false);
+                
+                if (!response) {
+                    throw new Error('No response received from AI service');
+                }
+                
+                // Parse and validate the AI response
+                const puzzleData = await this.parseAIResponse(response);
+                const validation = this.validatePuzzleData(puzzleData);
+                
+                if (puzzleData && validation.valid) {
+                    console.log('AI puzzle generated successfully');
+                    return puzzleData;
+                } else {
+                    const errorMsg = validation.errors ? validation.errors.join(', ') : 'Unknown validation error';
+                    throw new Error(`Invalid puzzle data: ${errorMsg}`);
+                }
+                
+            } catch (error) {
+                this.showThinking(false);
+                console.warn(`AI puzzle generation attempt ${attempt} failed:`, error);
+                
+                // Handle connection errors with intelligent reconnection
+                if (error.message.includes('Not connected to AI service') || 
+                    error.message.includes('Connection refused') || 
+                    error.message.includes('ERR_CONNECTION_REFUSED') ||
+                    error.message.includes('fetch')) {
                     
-                    try {
-                        this.showThinking(true);
-                        const response = await this.llmClient.generatePuzzle(prompt);
-                        this.showThinking(false);
-                        
-                        if (response) {
-                            const puzzleData = await this.parseAIResponse(response);
-                            const validation = this.validatePuzzleData(puzzleData);
-                            
-                            if (puzzleData && validation.valid) {
-                                console.log('Puzzle generated successfully after reconnection');
-                                return puzzleData;
-                            }
-                        }
-                    } catch (retryError) {
-                        console.error('Retry failed:', retryError);
-                        this.showThinking(false);
+                    console.log('Connection error detected, attempting intelligent reconnection...');
+                    const reconnected = await this.autoConnectToAI();
+                    
+                    if (reconnected) {
+                        console.log('Reconnected successfully, continuing with current attempt...');
+                        continue; // Retry this attempt
                     }
                 }
-            }
-            
-            // Provide specific error messages based on the error type
-            if (error.message.includes('Not connected to AI service')) {
-                throw new Error('No AI service connected. Please check your AI settings.');
-            } else if (error.message.includes('Invalid puzzle data')) {
-                throw new Error(`AI generated invalid puzzle data: ${error.message.split(': ')[1] || 'Unknown error'}`);
-            } else if (error.message.includes('401')) {
-                throw new Error('Invalid OpenAI API key. Please check your API key in AI settings.');
-            } else if (error.message.includes('Connection refused') || error.message.includes('ERR_CONNECTION_REFUSED')) {
-                throw new Error('LM Studio not running. Please start LM Studio or switch to OpenAI.');
-            } else if (error.message.includes('fetch')) {
-                throw new Error('Network error. Please check your internet connection and AI service settings.');
-            } else {
-                throw error;
+                
+                if (attempt === maxRetries) {
+                    // Provide specific error messages based on the error type
+                    if (error.message.includes('Not connected to AI service')) {
+                        throw new Error('No AI service connected. Please check your AI settings.');
+                    } else if (error.message.includes('Invalid puzzle data')) {
+                        throw new Error(`AI generated invalid puzzle data: ${error.message.split(': ')[1] || 'Unknown error'}`);
+                    } else if (error.message.includes('401')) {
+                        throw new Error('Invalid OpenAI API key. Please check your API key in AI settings.');
+                    } else if (error.message.includes('Connection refused') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+                        throw new Error('LM Studio not running. Please start LM Studio or switch to OpenAI.');
+                    } else if (error.message.includes('fetch')) {
+                        throw new Error('Network error. Please check your internet connection and AI service settings.');
+                    } else {
+                        throw new Error(`AI puzzle generation failed after ${maxRetries} attempts: ${error.message}`);
+                    }
+                }
+                
+                // Wait before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             }
         }
+    }
+
+    buildComprehensivePrompt(difficulty, gridSize, isPortuguese) {
+        const gridSpecs = this.getGridSizeValue(gridSize);
+        const difficultyInstructions = this.getDifficultyInstructions(difficulty);
+        
+        let basePrompt = CROSSWORD_GENERATION_PROMPT;
+        
+        let specificPrompt;
+        if (isPortuguese) {
+            specificPrompt = `
+Gere uma palavra cruzada em português:
+- Dificuldade: ${difficulty}
+- Tamanho da grade: ${gridSpecs.rows}x${gridSpecs.cols}
+- Todas as respostas devem ser em português
+- Todas as pistas devem ser em português
+- Use palavras comuns amplamente conhecidas
+- ${difficultyInstructions}
+
+Responda APENAS com o objeto JSON conforme especificado.`;
+        } else {
+            specificPrompt = `
+Generate an English crossword puzzle:
+- Difficulty: ${difficulty}  
+- Grid size: ${gridSpecs.rows}x${gridSpecs.cols}
+- All answers must be in English
+- All clues must be in English
+- Use commonly known words
+- ${difficultyInstructions}
+
+Respond with ONLY the JSON object as specified.`;
+        }
+        
+        return basePrompt + specificPrompt;
+    }
+
+    getDifficultyInstructions(difficulty) {
+        const instructions = {
+            easy: "Use simple vocabulary, straightforward clues, 3-6 letter words mainly",
+            medium: "Mix of common and moderately challenging words, some wordplay allowed",
+            hard: "Complex vocabulary, sophisticated wordplay, longer words acceptable"
+        };
+        
+        return instructions[difficulty] || instructions.medium;
     }
 
     async parseAIResponse(response) {
@@ -918,21 +952,13 @@ class CrosswordApp {
     }
 
     showNotification(message, type = 'info', duration = 5000) {
-        const notifications = document.getElementById('notifications');
-        if (!notifications) return;
-
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-
-        notifications.appendChild(notification);
-
-        // Auto remove after duration
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, duration);
+        // Use the centralized notification manager
+        if (window.notifications) {
+            return window.notifications.show(message, type, duration);
+        } else {
+            // Fallback for cases where notification manager isn't loaded yet
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
     }
 
     showModal(modalId) {
@@ -977,16 +1003,17 @@ class CrosswordApp {
             this.llmClient.setEndpoint(value);
         } else if (key === 'openaiApiKey') {
             // Check if the API key actually changed to prevent unnecessary operations
-            const currentKey = this.llmClient.getOpenAIApiKey ? this.llmClient.getOpenAIApiKey() : '';
+            const currentKey = this.llmClient.openaiApiKey || '';
             if (value === currentKey) {
                 return; // No change, skip processing
             }
             
+            console.log('OpenAI API key changed, updating connection...');
             this.llmClient.setOpenAIApiKey(value);
             
-            // If a new OpenAI API key is set, automatically test connection
+            // If a new OpenAI API key is set, automatically test connection and set provider
             if (value && value.trim()) {
-                console.log('New OpenAI API key detected, testing connection...');
+                console.log('New OpenAI API key detected, setting up connection...');
                 
                 // Clear any existing timeout to prevent multiple connection tests
                 if (this.connectionTestTimeout) {
@@ -997,16 +1024,22 @@ class CrosswordApp {
                     try {
                         // Ensure we're using OpenAI provider
                         this.llmClient.setProvider('openai');
+                        this.updateProviderUI('openai');
+                        
                         const result = await this.llmClient.testConnection();
                         
                         if (result.success) {
                             this.updateConnectionStatus(true, 'Connected to OpenAI');
-                            this.updateProviderUI('openai');
                             
                             const successMessage = window.i18n ? 
                                 window.i18n.t('openaiConnected') : 
                                 'Successfully connected to OpenAI!';
                             this.showNotification(successMessage, 'success');
+                            
+                            // Update connection info
+                            if (this.ui && this.ui.settingsManager) {
+                                this.ui.settingsManager.updateConnectionInfo();
+                            }
                         } else {
                             const errorMessage = window.i18n ? 
                                 window.i18n.t('connectionFailed') : 
@@ -1020,7 +1053,12 @@ class CrosswordApp {
                             'Error testing connection. Please check your API key.';
                         this.showNotification(errorMessage, 'error');
                     }
-                }, 1500); // Wait 1.5 seconds to ensure key is fully saved
+                }, 800); // Shorter delay for better user experience
+            } else if (value === '' || value === null) {
+                // API key was cleared
+                this.updateConnectionStatus(false, 'No API key set');
+                this.llmClient.setProvider('lmstudio'); // Fall back to LM Studio
+                this.updateProviderUI('lmstudio');
             }
         }
     }
@@ -1426,30 +1464,6 @@ const app = new CrosswordApp();
 // Make app globally accessible for UI components
 window.app = app;
 
-// Initialize the application when DOM is loaded
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        await app.init();
-        
-        // Make debug function available globally
-        window.debugStorage = () => app.debugStorage();
-        console.log('Debug function available: window.debugStorage()');
-        
-    } catch (error) {
-        console.error('Failed to initialize application:', error);
-        
-        // Show error message to user
-        const errorMessage = document.createElement('div');
-        errorMessage.className = 'error-message';
-        errorMessage.innerHTML = `
-            <h3>Application Error</h3>
-            <p>Failed to initialize the crossword puzzle application.</p>
-            <p>Please refresh the page and try again.</p>
-            <details>
-                <summary>Error Details</summary>
-                <pre>${error.message}</pre>
-            </details>
-        `;
-        document.body.appendChild(errorMessage);
-    }
-}); 
+// Make debug function available globally
+window.debugStorage = () => app.debugStorage();
+console.log('Debug function available: window.debugStorage()'); 
